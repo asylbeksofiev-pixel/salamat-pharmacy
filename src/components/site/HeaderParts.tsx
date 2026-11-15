@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
-import { usePathname, useSearchParams } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { usePathname } from "next/navigation";
+import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent } from "react";
 import { Icon, isIconName } from "../icons";
 import { cn } from "../ui/cn";
 import { Drawer } from "../ui/Dialog";
@@ -9,6 +9,27 @@ import { useSite } from "./SiteProvider";
 import { useCartCount, useFavorites, useHydrated } from "@/lib/client/stores";
 import { fmt, localeLabels, localeNames, localizedPath, locales, splitLocale } from "@/lib/i18n/config";
 import { formatPhone, telHref } from "@/lib/format";
+
+/**
+ * Props for a link that behaves as a button once JavaScript has loaded.
+ * Before hydration (slow mobile networks) the link still works and opens the fallback page.
+ */
+function enhancedButton(onActivate: () => void) {
+  return {
+    role: "button" as const,
+    onClick: (e: ReactMouseEvent<HTMLAnchorElement>) => {
+      if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
+      e.preventDefault();
+      onActivate();
+    },
+    onKeyDown: (e: ReactKeyboardEvent<HTMLAnchorElement>) => {
+      if (e.key === " ") {
+        e.preventDefault();
+        onActivate();
+      }
+    },
+  };
+}
 
 export interface MenuCategory {
   slug: string;
@@ -20,19 +41,22 @@ export interface MenuCategory {
 export function LanguageSwitcher({ className }: { className?: string }) {
   const { locale, t } = useSite();
   const pathname = usePathname() || "/";
-  const search = useSearchParams();
   const { path } = splitLocale(pathname);
   return (
     <div className={cn("flex items-center gap-0.5 rounded-full bg-surface p-0.5", className)} role="group" aria-label={t.common.language}>
       {locales.map((l) => {
-        const params = new URLSearchParams(search?.toString());
-        params.set("lang", l);
-        const target = `${localizedPath(l, path)}?${params.toString()}`;
+        const target = `${localizedPath(l, path)}?lang=${l}`;
         const current = l === locale;
         return (
           <a
             key={l}
             href={target}
+            onClick={(e) => {
+              // Keep filters and search query when switching language.
+              const params = new URLSearchParams(window.location.search);
+              params.set("lang", l);
+              e.currentTarget.href = `${localizedPath(l, path)}?${params.toString()}`;
+            }}
             hrefLang={l}
             lang={l}
             aria-current={current ? "true" : undefined}
@@ -52,11 +76,12 @@ export function LanguageSwitcher({ className }: { className?: string }) {
 }
 
 export function PharmacyChip({ compact = false }: { compact?: boolean }) {
-  const { pharmacy, t, openPharmacyPicker } = useSite();
+  const { pharmacy, t, openPharmacyPicker, href } = useSite();
   return (
-    <button
-      type="button"
-      onClick={openPharmacyPicker}
+    <a
+      href={href("/pharmacies")}
+      aria-haspopup="dialog"
+      {...enhancedButton(openPharmacyPicker)}
       className={cn(
         "flex min-w-0 items-center gap-2 rounded-[var(--radius-md)] text-left transition-colors",
         compact ? "w-full border border-line px-3 py-2" : "max-w-[15rem] px-2.5 py-1.5 hover:bg-surface",
@@ -68,7 +93,7 @@ export function PharmacyChip({ compact = false }: { compact?: boolean }) {
         <span className="block text-[0.72rem] leading-tight text-muted">{pharmacy ? t.header.yourPharmacy : t.common.pharmacies}</span>
         <span className="block truncate text-sm leading-tight font-semibold">{pharmacy ? pharmacy.address : t.header.selectPharmacy}</span>
       </span>
-    </button>
+    </a>
   );
 }
 
@@ -125,16 +150,16 @@ export function CatalogMenu({ categories }: { categories: MenuCategory[] }) {
   }, [open]);
   return (
     <div ref={ref} className="relative hidden md:block">
-      <button
-        type="button"
+      <a
+        href={href("/catalog")}
         aria-expanded={open}
         aria-controls="catalog-menu"
-        onClick={() => setOpen((o) => !o)}
+        {...enhancedButton(() => setOpen((o) => !o))}
         className="flex h-12 items-center gap-2 rounded-[var(--radius-lg)] bg-brand-600 px-4 font-semibold text-white transition-colors hover:bg-brand-700"
       >
         <Icon name={open ? "close" : "grid"} size={20} />
         {t.common.catalog}
-      </button>
+      </a>
       {open ? (
         <div id="catalog-menu" className="anim-pop absolute top-full left-0 z-50 mt-2 w-[min(46rem,calc(100vw-3rem))] rounded-[var(--radius-xl)] border border-line bg-white p-3 shadow-[var(--shadow-pop)]">
           <ul className="grid grid-cols-2 gap-1">
@@ -183,9 +208,9 @@ export function MobileMenu({ categories }: { categories: MenuCategory[] }) {
   ];
   return (
     <>
-      <button type="button" onClick={() => setOpen(true)} className="grid size-11 place-items-center rounded-[var(--radius-md)] text-ink hover:bg-surface md:hidden" aria-label={t.common.menu} aria-haspopup="dialog">
+      <a href={href("/catalog")} {...enhancedButton(() => setOpen(true))} className="grid size-11 place-items-center rounded-[var(--radius-md)] text-ink hover:bg-surface md:hidden" aria-label={t.common.menu} aria-haspopup="dialog">
         <Icon name="menu" />
-      </button>
+      </a>
       <Drawer open={open} onClose={() => setOpen(false)} title={t.common.menu} closeLabel={t.common.closeMenu} side="left">
         <div className="flex flex-col gap-5">
           <PharmacyChip compact />

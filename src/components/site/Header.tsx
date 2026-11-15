@@ -1,6 +1,5 @@
 import Image from "next/image";
 import Link from "next/link";
-import { Suspense } from "react";
 import type { Dictionary, Locale } from "@/lib/i18n";
 import { localizedPath } from "@/lib/i18n";
 import { formatPhone, telHref } from "@/lib/format";
@@ -35,22 +34,16 @@ export function Header({ locale, t, categories, helpline, cityName }: { locale: 
               <span className="sr-only">{t.common.helpline}: </span>
               {formatPhone(helpline)}
             </a>
-            <Suspense>
-              <LanguageSwitcher />
-            </Suspense>
+            <LanguageSwitcher />
           </div>
         </div>
       </div>
       <div className="container-page flex h-16 items-center gap-2 md:h-20 md:gap-4">
-        <Suspense>
-          <MobileMenu categories={categories} />
-        </Suspense>
+        <MobileMenu categories={categories} />
         <Link href={href("/")} className="shrink-0 rounded-md" aria-label={`${t.meta.siteName} — ${t.common.home}`}>
           <Image src="/brand/salamat-logo.png" alt="SALAMAT" width={1450} height={366} priority className="h-8 w-auto md:h-10" />
         </Link>
-        <Suspense>
-          <CatalogMenu categories={categories} />
-        </Suspense>
+        <CatalogMenu categories={categories} />
         <div className="hidden min-w-0 flex-1 md:block">
           <SearchBox idPrefix="hdr" />
         </div>

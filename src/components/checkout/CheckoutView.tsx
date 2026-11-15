@@ -246,7 +246,7 @@ export function CheckoutView() {
               </div>
               {quote?.hasUnpriced ? <p className="mt-2 text-sm text-muted">{t.cart.unpricedNote}</p> : null}
             </div>
-            <Button type="submit" size="lg" className="mt-5 w-full" loading={submitting} disabled={loading || !quote || quote.hasBlocking || !pharmacy}>
+            <Button type="submit" size="lg" className="mt-5 w-full" loading={submitting} disabled={!quote || quote.hasBlocking || !pharmacy}>
               {submitting ? t.checkout.submitting : t.checkout.submit}
             </Button>
             <p className="mt-3 text-xs text-muted">{t.cart.notPaymentNote}</p>

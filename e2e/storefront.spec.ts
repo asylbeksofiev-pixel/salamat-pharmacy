@@ -172,3 +172,24 @@ test("19. RU/KZ switching keeps the language while navigating", async ({ page })
   await expect(page).toHaveURL(/localhost:\d+\/$/);
   await expect(page.locator("html")).toHaveAttribute("lang", "ru-KZ");
 });
+
+test("buttons keep working before JavaScript has loaded (slow networks)", async ({ browser }) => {
+  const ctx = await browser.newContext({ javaScriptEnabled: false });
+  const page = await ctx.newPage();
+  await page.goto("/");
+  // "Choose pharmacy" opens the pharmacy list instead of doing nothing.
+  await page.locator("header").getByRole("button", { name: /Выбрать аптеку/ }).first().click();
+  await expect(page).toHaveURL(/\/pharmacies$/);
+  // "Select" sets the pharmacy with a plain form post and returns to the same page.
+  await page.getByRole("article").filter({ hasText: "Майлина" }).getByRole("button", { name: "Выбрать" }).click();
+  await expect(page).toHaveURL(/\/pharmacies$/);
+  await expect(page.locator("header")).toContainText("Майлина");
+  // Catalogue button and search form.
+  await page.locator("header").getByRole("button", { name: "Каталог" }).click();
+  await expect(page).toHaveURL(/\/catalog$/);
+  await page.locator("header").getByRole("combobox").fill("парацетамол");
+  await page.locator("header").getByRole("button", { name: "Найти" }).click();
+  await expect(page).toHaveURL(/\/search\?q=/);
+  await expect(page.locator("main")).toContainText("Парацетамол 500 мг №20 табл.");
+  await ctx.close();
+});
