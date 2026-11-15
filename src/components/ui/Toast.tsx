@@ -37,7 +37,7 @@ export function ToastProvider({ children, closeLabel }: { children: ReactNode; c
           <div
             key={t.id}
             className={cn(
-              "pointer-events-auto flex w-full max-w-md items-center gap-3 rounded-[var(--radius-lg)] px-4 py-3 text-[0.95rem] text-white shadow-[var(--shadow-pop)]",
+              "anim-toast pointer-events-auto flex w-full max-w-md items-center gap-3 rounded-[var(--radius-lg)] px-4 py-3 text-[0.95rem] text-white shadow-[var(--shadow-pop)]",
               t.tone === "error" ? "bg-accent-700" : t.tone === "info" ? "bg-ink" : "bg-brand-800",
             )}
           >

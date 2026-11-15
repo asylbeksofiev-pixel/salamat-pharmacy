@@ -1,6 +1,7 @@
 "use client";
 // Modal and Drawer built on the native <dialog>: focus is trapped, Escape closes, focus returns to the trigger.
-import { useEffect, useRef, type ReactNode } from "react";
+// Opening and closing are animated (CSS in globals.css); content stays mounted until the close animation ends.
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { cn } from "./cn";
 import { Icon } from "../icons";
 
@@ -15,47 +16,81 @@ interface DialogProps {
   description?: ReactNode;
 }
 
+const CLOSE_FALLBACK_MS = 260;
+
 function useDialog(open: boolean, onClose: () => void) {
   const ref = useRef<HTMLDialogElement>(null);
   const opener = useRef<Element | null>(null);
+  const onCloseRef = useRef(onClose);
+  // Keep content rendered while the closing animation plays.
+  const [mounted, setMounted] = useState(open);
+  if (open && !mounted) setMounted(true);
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
   useEffect(() => {
     const d = ref.current;
     if (!d) return;
-    if (open && !d.open) {
-      opener.current = document.activeElement;
-      d.showModal();
-      document.documentElement.style.overflow = "hidden";
-    } else if (!open && d.open) {
-      d.close();
+    if (open) {
+      delete d.dataset.closing;
+      if (!d.open) {
+        opener.current = document.activeElement;
+        d.showModal();
+        document.documentElement.style.overflow = "hidden";
+      }
+      return;
     }
+    if (!d.open) return;
+    // Play the exit animation, then really close the dialog.
+    d.dataset.closing = "true";
+    let finished = false;
+    const finish = () => {
+      if (finished) return;
+      finished = true;
+      d.removeEventListener("animationend", onEnd);
+      delete d.dataset.closing;
+      d.close();
+      setMounted(false);
+    };
+    const onEnd = (e: AnimationEvent) => {
+      if (e.target === d) finish();
+    };
+    d.addEventListener("animationend", onEnd);
+    const timer = window.setTimeout(finish, CLOSE_FALLBACK_MS);
     return () => {
-      if (!open) document.documentElement.style.overflow = "";
+      window.clearTimeout(timer);
+      d.removeEventListener("animationend", onEnd);
     };
   }, [open]);
+
   useEffect(() => {
     const d = ref.current;
     if (!d) return;
     const handleClose = () => {
       document.documentElement.style.overflow = "";
       if (opener.current instanceof HTMLElement) opener.current.focus();
-      onClose();
     };
+    // Escape: let the parent close us so the exit animation runs.
     const handleCancel = (e: Event) => {
       e.preventDefault();
-      onClose();
+      onCloseRef.current();
     };
     d.addEventListener("close", handleClose);
     d.addEventListener("cancel", handleCancel);
     return () => {
       d.removeEventListener("close", handleClose);
       d.removeEventListener("cancel", handleCancel);
+      document.documentElement.style.overflow = "";
     };
-  }, [onClose]);
-  return ref;
+  }, []);
+
+  return { ref, mounted };
 }
 
 export function Modal({ open, onClose, title, children, footer, closeLabel, className, description }: DialogProps) {
-  const ref = useDialog(open, onClose);
+  const { ref, mounted } = useDialog(open, onClose);
   return (
     <dialog
       ref={ref}
@@ -64,11 +99,11 @@ export function Modal({ open, onClose, title, children, footer, closeLabel, clas
         if (e.target === e.currentTarget) onClose();
       }}
       className={cn(
-        "m-auto w-[min(32rem,calc(100vw-2rem))] rounded-[var(--radius-xl)] bg-white p-0 text-ink shadow-[var(--shadow-pop)] backdrop:bg-ink/45 backdrop:backdrop-blur-[2px]",
+        "sal-modal m-auto w-[min(32rem,calc(100vw-2rem))] rounded-[var(--radius-xl)] bg-white p-0 text-ink shadow-[var(--shadow-pop)] backdrop:bg-ink/45 backdrop:backdrop-blur-[2px]",
         className,
       )}
     >
-      {open ? (
+      {mounted ? (
         <div className="flex max-h-[85vh] flex-col">
           <div className="flex items-start justify-between gap-4 border-b border-line px-5 py-4">
             <div>
@@ -77,7 +112,7 @@ export function Modal({ open, onClose, title, children, footer, closeLabel, clas
               </h2>
               {description ? <p className="mt-1 text-sm text-muted">{description}</p> : null}
             </div>
-            <button type="button" onClick={onClose} className="-mr-2 grid size-10 shrink-0 place-items-center rounded-full text-muted hover:bg-surface hover:text-ink" aria-label={closeLabel}>
+            <button type="button" onClick={onClose} className="-mr-2 grid size-10 shrink-0 place-items-center rounded-full text-muted transition-colors hover:bg-surface hover:text-ink" aria-label={closeLabel}>
               <Icon name="close" />
             </button>
           </div>
@@ -90,13 +125,13 @@ export function Modal({ open, onClose, title, children, footer, closeLabel, clas
 }
 
 export function Drawer({ open, onClose, title, children, footer, closeLabel, className, side = "right", description }: DialogProps & { side?: "left" | "right" | "bottom" }) {
-  const ref = useDialog(open, onClose);
+  const { ref, mounted } = useDialog(open, onClose);
   const pos =
     side === "left"
-      ? "mr-auto ml-0 h-dvh max-h-dvh w-[min(24rem,92vw)] rounded-r-[var(--radius-xl)]"
+      ? "sal-drawer-left mr-auto ml-0 h-dvh max-h-dvh w-[min(24rem,92vw)] rounded-r-[var(--radius-xl)]"
       : side === "bottom"
-        ? "mt-auto mb-0 w-full max-w-none max-h-[88dvh] rounded-t-[var(--radius-xl)]"
-        : "ml-auto mr-0 h-dvh max-h-dvh w-[min(28rem,94vw)] rounded-l-[var(--radius-xl)]";
+        ? "sal-drawer-bottom mt-auto mb-0 w-full max-w-none max-h-[88dvh] rounded-t-[var(--radius-xl)]"
+        : "sal-drawer-right ml-auto mr-0 h-dvh max-h-dvh w-[min(28rem,94vw)] rounded-l-[var(--radius-xl)]";
   return (
     <dialog
       ref={ref}
@@ -106,7 +141,7 @@ export function Drawer({ open, onClose, title, children, footer, closeLabel, cla
       }}
       className={cn("bg-white p-0 text-ink shadow-[var(--shadow-pop)] backdrop:bg-ink/45", pos, className)}
     >
-      {open ? (
+      {mounted ? (
         <div className="flex h-full max-h-[inherit] flex-col">
           <div className="flex items-start justify-between gap-3 border-b border-line px-5 py-4">
             <div className="min-w-0">
@@ -115,7 +150,7 @@ export function Drawer({ open, onClose, title, children, footer, closeLabel, cla
               </h2>
               {description ? <p className="mt-0.5 text-sm text-muted">{description}</p> : null}
             </div>
-            <button type="button" onClick={onClose} className="-mr-2 grid size-10 shrink-0 place-items-center rounded-full text-muted hover:bg-surface hover:text-ink" aria-label={closeLabel}>
+            <button type="button" onClick={onClose} className="-mr-2 grid size-10 shrink-0 place-items-center rounded-full text-muted transition-colors hover:bg-surface hover:text-ink" aria-label={closeLabel}>
               <Icon name="close" />
             </button>
           </div>

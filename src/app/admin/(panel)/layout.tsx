@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import { ViewTransition } from "react";
 import { requireStaffPage } from "@/server/auth/session";
 import { can, ROLE_LABELS, type Permission } from "@/server/auth/permissions";
 import { logoutAction } from "../auth-actions";
@@ -39,7 +40,7 @@ export default async function PanelLayout({ children }: { children: React.ReactN
   );
   return (
     <div className="min-h-screen lg:grid lg:grid-cols-[15.5rem_1fr]">
-      <aside className="hidden border-r border-line bg-white lg:flex lg:flex-col">
+      <aside style={{ viewTransitionName: "admin-sidebar" }} className="hidden border-r border-line bg-white lg:flex lg:flex-col">
         <div className="sticky top-0 flex max-h-screen flex-col gap-4 overflow-y-auto p-4">
           <Link href="/admin" className="px-2 pt-1">
             <Image src="/brand/salamat-logo.png" alt="SALAMAT" width={1450} height={366} className="h-7 w-auto" />
@@ -70,7 +71,11 @@ export default async function PanelLayout({ children }: { children: React.ReactN
             </form>
           </div>
         </header>
-        <main className="px-4 py-6 sm:px-6 lg:px-8">{children}</main>
+        <main className="px-4 py-6 sm:px-6 lg:px-8">
+          <ViewTransition default="page">
+            <div>{children}</div>
+          </ViewTransition>
+        </main>
       </div>
     </div>
   );

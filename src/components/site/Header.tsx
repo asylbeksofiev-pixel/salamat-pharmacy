@@ -11,7 +11,7 @@ import { CatalogMenu, HeaderCounters, LanguageSwitcher, MobileMenu, PharmacyChip
 export function Header({ locale, t, categories, helpline, cityName }: { locale: Locale; t: Dictionary; categories: MenuCategory[]; helpline: string; cityName: string }) {
   const href = (p: string) => localizedPath(locale, p);
   return (
-    <header className="relative z-40 border-b border-line bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/85 md:sticky md:top-0">
+    <header style={{ viewTransitionName: "site-header" }} className="relative z-40 border-b border-line bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/85 md:sticky md:top-0">
       <div className="hidden border-b border-line md:block">
         <div className="container-page flex h-10 items-center justify-between gap-6 text-sm">
           <div className="flex items-center gap-5">

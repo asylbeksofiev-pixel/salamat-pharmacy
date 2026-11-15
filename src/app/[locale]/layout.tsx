@@ -1,6 +1,7 @@
 import "@fontsource-variable/onest";
 import "../globals.css";
 import type { Metadata, Viewport } from "next";
+import { ViewTransition } from "react";
 import { notFound } from "next/navigation";
 import { getDictionary, isLocale, localeTags, locales, type Locale } from "@/lib/i18n";
 import { getCategoryTree } from "@/server/catalog";
@@ -70,7 +71,7 @@ export default async function LocaleLayout({ children, params }: LayoutProps<"/[
   const cityName = city ? (locale === "kk" ? (city.nameKk ?? city.nameRu) : city.nameRu) : t.header.cityAstana;
 
   return (
-    <html lang={localeTags[locale]} className="h-full">
+    <html lang={localeTags[locale]} className="h-full" data-scroll-behavior="smooth">
       <body className="flex min-h-full flex-col">
         <a href="#main" className="sr-only z-[100] rounded-md bg-brand-700 px-4 py-2 font-semibold text-white focus:not-sr-only focus:fixed focus:top-2 focus:left-2">
           {t.common.skipToContent}
@@ -93,7 +94,10 @@ export default async function LocaleLayout({ children, params }: LayoutProps<"/[
           ) : null}
           <Header locale={locale} t={t} categories={categories} helpline={settings.helpline.phone} cityName={cityName} />
           <main id="main" className="flex-1">
-            {children}
+            {/* Page changes cross-fade (styles: ::view-transition-*(.page) in globals.css). */}
+            <ViewTransition default="page">
+              <div>{children}</div>
+            </ViewTransition>
           </main>
           <Footer locale={locale} t={t} helpline={settings.helpline.phone} company={settings.company} categories={categories} />
           <MobileBottomNav />

@@ -104,6 +104,168 @@
   }
 }
 
+/* ---------- Smooth motion ---------- */
+
+html[data-scroll-behavior="smooth"] {
+  scroll-behavior: smooth;
+}
+
+/* Page changes: React <ViewTransition default="page"> in the layouts.
+   Old content fades out quickly, new content fades in and rises slightly. Header and bottom bar stay put. */
+::view-transition {
+  pointer-events: none;
+}
+::view-transition-group(.page) {
+  animation-duration: 0s;
+}
+::view-transition-old(.page) {
+  animation: 140ms ease-in both sal-fade-out;
+}
+::view-transition-new(.page) {
+  animation: 260ms var(--ease-out-soft) 60ms both sal-rise-in;
+}
+::view-transition-group(site-header),
+::view-transition-group(bottom-nav),
+::view-transition-group(admin-sidebar) {
+  animation: none;
+  z-index: 100;
+}
+::view-transition-old(site-header),
+::view-transition-old(bottom-nav),
+::view-transition-old(admin-sidebar) {
+  display: none;
+}
+::view-transition-new(site-header),
+::view-transition-new(bottom-nav),
+::view-transition-new(admin-sidebar) {
+  animation: none;
+}
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 120ms;
+}
+
+/* Dialogs: modal pops in, drawers slide from their edge; both animate out before closing. */
+dialog[open]::backdrop {
+  animation: 200ms ease-out both sal-fade-in;
+}
+dialog[data-closing]::backdrop {
+  animation: 180ms ease-in both sal-fade-out;
+}
+dialog.sal-modal[open] {
+  animation: 220ms var(--ease-out-soft) both sal-pop-in;
+}
+dialog.sal-drawer-right[open] {
+  animation: 280ms var(--ease-out-soft) both sal-slide-from-right;
+}
+dialog.sal-drawer-left[open] {
+  animation: 280ms var(--ease-out-soft) both sal-slide-from-left;
+}
+dialog.sal-drawer-bottom[open] {
+  animation: 300ms var(--ease-out-soft) both sal-slide-from-bottom;
+}
+dialog.sal-modal[data-closing] {
+  animation: 160ms ease-in both sal-pop-out;
+}
+dialog.sal-drawer-right[data-closing] {
+  animation: 200ms ease-in both sal-slide-to-right;
+}
+dialog.sal-drawer-left[data-closing] {
+  animation: 200ms ease-in both sal-slide-to-left;
+}
+dialog.sal-drawer-bottom[data-closing] {
+  animation: 220ms ease-in both sal-slide-to-bottom;
+}
+
+/* Dropdowns (catalogue menu, search suggestions) and toasts */
+.anim-pop {
+  animation: 180ms var(--ease-out-soft) both sal-drop-in;
+  transform-origin: top center;
+}
+.anim-toast {
+  animation: 260ms var(--ease-out-soft) both sal-rise-in;
+}
+
+/* Accordions (<details>): smooth height where the browser supports it */
+:root {
+  interpolate-size: allow-keywords;
+}
+details::details-content {
+  block-size: 0;
+  overflow: clip;
+  transition:
+    block-size 240ms var(--ease-out-soft),
+    content-visibility 240ms allow-discrete;
+}
+details[open]::details-content {
+  block-size: auto;
+}
+
+@keyframes sal-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes sal-fade-out {
+  to {
+    opacity: 0;
+  }
+}
+@keyframes sal-rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+@keyframes sal-pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.97);
+  }
+}
+@keyframes sal-pop-out {
+  to {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+}
+@keyframes sal-drop-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.99);
+  }
+}
+@keyframes sal-slide-from-right {
+  from {
+    transform: translateX(100%);
+  }
+}
+@keyframes sal-slide-to-right {
+  to {
+    transform: translateX(100%);
+  }
+}
+@keyframes sal-slide-from-left {
+  from {
+    transform: translateX(-100%);
+  }
+}
+@keyframes sal-slide-to-left {
+  to {
+    transform: translateX(-100%);
+  }
+}
+@keyframes sal-slide-from-bottom {
+  from {
+    transform: translateY(100%);
+  }
+}
+@keyframes sal-slide-to-bottom {
+  to {
+    transform: translateY(100%);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -112,5 +274,13 @@
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
+  details::details-content {
+    transition: none;
   }
 }

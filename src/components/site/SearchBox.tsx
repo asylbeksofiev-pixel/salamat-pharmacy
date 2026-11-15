@@ -139,7 +139,7 @@ export function SearchBox({ defaultValue = "", size = "md", autoFocus = false, i
         </button>
       </div>
       {showList ? (
-        <div className="absolute inset-x-0 top-full z-50 mt-2 overflow-hidden rounded-[var(--radius-lg)] border border-line bg-white shadow-[var(--shadow-pop)]">
+        <div className="anim-pop absolute inset-x-0 top-full z-50 mt-2 overflow-hidden rounded-[var(--radius-lg)] border border-line bg-white shadow-[var(--shadow-pop)]">
           <ul id={listId} role="listbox" aria-label={t.search.suggestionsLabel} className="max-h-[60vh] overflow-y-auto py-1.5">
             {visible.length === 0 && !loading ? (
               <li className="px-4 py-3 text-sm text-muted" role="presentation">

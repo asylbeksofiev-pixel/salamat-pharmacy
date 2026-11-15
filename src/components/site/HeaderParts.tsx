@@ -136,7 +136,7 @@ export function CatalogMenu({ categories }: { categories: MenuCategory[] }) {
         {t.common.catalog}
       </button>
       {open ? (
-        <div id="catalog-menu" className="absolute top-full left-0 z-50 mt-2 w-[min(46rem,calc(100vw-3rem))] rounded-[var(--radius-xl)] border border-line bg-white p-3 shadow-[var(--shadow-pop)]">
+        <div id="catalog-menu" className="anim-pop absolute top-full left-0 z-50 mt-2 w-[min(46rem,calc(100vw-3rem))] rounded-[var(--radius-xl)] border border-line bg-white p-3 shadow-[var(--shadow-pop)]">
           <ul className="grid grid-cols-2 gap-1">
             {categories.map((c) => (
               <li key={c.slug}>
@@ -243,7 +243,7 @@ export function MobileBottomNav() {
     { href: "/cart", label: t.common.cart, icon: "cart" as const, match: (p: string) => p.startsWith("/cart") || p.startsWith("/checkout"), badge: hydrated ? count : 0 },
   ];
   return (
-    <nav aria-label={t.common.menu} className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden" lang={locale}>
+    <nav aria-label={t.common.menu} style={{ viewTransitionName: "bottom-nav" }} className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden" lang={locale}>
       <ul className="grid grid-cols-5">
         {items.map((it) => {
           const active = it.match(path);
