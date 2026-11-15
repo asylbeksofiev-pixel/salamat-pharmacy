@@ -1,0 +1,174 @@
+import { expect, test } from "@playwright/test";
+import { PRODUCT, db, resetLimits, selectPharmacy } from "./helpers";
+
+test.beforeEach(resetLimits);
+
+test("1. home page opens without errors on mobile, tablet and desktop", async ({ page }) => {
+  const errors: string[] = [];
+  page.on("pageerror", (e) => errors.push(String(e)));
+  for (const width of [375, 768, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    const res = await page.goto("/");
+    expect(res?.status()).toBe(200);
+    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+    expect(overflow, `horizontal overflow at ${width}px`).toBeLessThanOrEqual(0);
+  }
+  expect(errors).toEqual([]);
+});
+
+test("2. logo, menu and footer links lead to existing pages", async ({ page, request }) => {
+  await page.goto("/catalog");
+  await page.getByRole("link", { name: /SALAMAT — Главная/ }).click();
+  await expect(page).toHaveURL(/\/$/);
+  const hrefs = await page.locator("header a[href^='/'], footer a[href^='/'], main a[href^='/']").evaluateAll((els) => Array.from(new Set(els.map((e) => (e as HTMLAnchorElement).getAttribute("href")!))));
+  expect(hrefs.length).toBeGreaterThan(20);
+  for (const href of hrefs) {
+    const r = await request.get(href);
+    expect(r.status(), href).toBeLessThan(400);
+  }
+});
+
+test("3-4. search finds by part of the name and keeps dosages apart", async ({ page }) => {
+  await page.goto("/");
+  const box = page.getByRole("combobox").first();
+  await box.fill("параЦ");
+  await expect(page.getByRole("listbox")).toContainText("Парацетамол 500 мг №20 табл.");
+  await box.press("Enter");
+  await expect(page).toHaveURL(/\/search\?q=/);
+  const titles = await page.locator("main article h3").allTextContents();
+  expect(titles).toEqual(expect.arrayContaining(["Парацетамол 200 мг №10 табл.", "Парацетамол 500 мг №10 табл.", "Парацетамол 500 мг №20 табл.", "Парацетамол сироп 120 мг/5 мл 100 мл"]));
+  expect(new Set(titles).size).toBe(titles.length);
+});
+
+test("5. filters apply and are kept in the URL", async ({ page }) => {
+  await page.goto("/catalog/lekarstvennye-sredstva");
+  const sidebar = page.getByRole("complementary", { name: "Фильтры" });
+  await sidebar.getByLabel("Пример Лаб").check();
+  await expect(page).toHaveURL(/brand=primer-lab/);
+  const titles = await page.locator("main article h3").allTextContents();
+  expect(titles.length).toBeGreaterThan(0);
+  expect(titles.every((t) => /Ибупрофен|Амоксициллин/.test(t))).toBe(true);
+  await page.reload();
+  await expect(page.getByRole("complementary", { name: "Фильтры" }).getByLabel("Пример Лаб")).toBeChecked();
+  await page.getByLabel("Сортировка").selectOption("name_desc");
+  await expect(page).toHaveURL(/sort=name_desc/);
+  await expect(page).toHaveURL(/brand=primer-lab/);
+});
+
+test("6-8. pharmacy choice drives price and availability; no 0 ₸, no fake stock", async ({ page }) => {
+  await page.goto(`${PRODUCT}?sku=paratsetamol-500-mg-20-tabl`);
+  const offer = page.getByRole("region", { name: "Цена в аптеке" });
+  await expect(offer.getByRole("button", { name: "Выбрать аптеку", exact: true })).toBeVisible();
+  await selectPharmacy(page, /Асфендиярова/);
+  await expect(offer).toContainText("450");
+  await expect(offer).toContainText("Есть в наличии");
+  await selectPharmacy(page, /Майлина/);
+  await expect(offer).toContainText("470");
+
+  await selectPharmacy(page, /Асфендиярова/);
+  await page.goto(`${PRODUCT}?sku=paratsetamol-200-mg-10-tabl`);
+  await expect(offer).toContainText("Цена уточняется");
+  await expect(offer).toContainText("Наличие уточняется");
+  await expect(offer).not.toContainText(/\b0\s?₸/);
+  await expect(offer.getByRole("button", { name: "Уточнить наличие" })).toBeVisible();
+
+  await page.goto("/product/ibuprofen-primer-lab?sku=ibuprofen-200-mg-20-tabl-p-o");
+  await expect(offer).toContainText("520");
+  await expect(offer).toContainText("Наличие уточняется");
+  await expect(offer).not.toContainText("Есть в наличии");
+});
+
+test("9-10. cart survives reload and quantity recalculates the total", async ({ page }) => {
+  await page.goto("/");
+  await selectPharmacy(page, /Асфендиярова/);
+  await page.goto(`${PRODUCT}?sku=paratsetamol-500-mg-20-tabl`);
+  await page.getByRole("region", { name: "Цена в аптеке" }).getByRole("button", { name: "В корзину" }).click();
+  await page.goto("/cart");
+  await expect(page.getByRole("heading", { name: /Корзина/ })).toBeVisible();
+  await page.reload();
+  await expect(page.locator("main")).toContainText("Парацетамол 500 мг №20 табл.");
+  const summary = page.locator("aside").first();
+  await expect(summary).toContainText(/450\s₸/);
+  await page.getByRole("button", { name: "Увеличить количество" }).first().click();
+  await expect(summary).toContainText(/900\s₸/);
+});
+
+test("11-13. checkout re-checks prices, saves one request, operator sees it", async ({ page, browser }) => {
+  await page.goto("/");
+  await selectPharmacy(page, /Асфендиярова/);
+  await page.goto(`${PRODUCT}?sku=paratsetamol-500-mg-10-tabl`);
+  await page.getByRole("region", { name: "Цена в аптеке" }).getByRole("button", { name: "В корзину" }).click();
+  // Price changes after the item was added.
+  const v = await db.productVariant.findFirstOrThrow({ where: { externalId: "D-0002" } });
+  const ph = await db.pharmacy.findUniqueOrThrow({ where: { code: "SAL-01" } });
+  await db.price.update({ where: { variantId_pharmacyId: { variantId: v.id, pharmacyId: ph.id } }, data: { priceKzt: 290, sourceUpdatedAt: new Date() } });
+
+  await page.goto("/checkout");
+  await expect(page.locator("aside")).toContainText(/290\s₸/);
+  await expect(page.locator("main")).toContainText("Цена изменилась");
+  const name = `E2E ${Date.now()}`;
+  await page.getByLabel("Имя").fill(name);
+  await page.getByLabel("Телефон").fill("87011234567");
+  await page.locator("input[name=consent]").check();
+  const submit = page.getByRole("button", { name: "Отправить заявку" });
+  await submit.dblclick();
+  await page.waitForURL(/\/order\/success\/S-/);
+  await expect(page.locator("main")).toContainText("Заявка отправлена");
+  await expect(page.locator("main")).toContainText("оператор");
+  const publicId = page.url().split("/").pop()!;
+  expect(await db.order.count({ where: { customerName: name } })).toBe(1);
+  const saved = await db.order.findUniqueOrThrow({ where: { publicId }, include: { items: true } });
+  expect(saved.items[0].unitPriceKzt).toBe(290);
+
+  const ctx = await browser.newContext();
+  const admin = await ctx.newPage();
+  const { loginAdmin } = await import("./helpers");
+  await loginAdmin(admin, "operator@salamat.local");
+  await admin.goto("/admin/orders");
+  await expect(admin.getByRole("link", { name: publicId })).toBeVisible();
+  await admin.getByRole("link", { name: publicId }).click();
+  await expect(admin.locator("main")).toContainText(name);
+  await admin.getByLabel("Новый статус").selectOption("PROCESSING");
+  await admin.getByRole("button", { name: "Применить" }).click();
+  await expect(admin.locator("main")).toContainText("Статус: В обработке");
+  await ctx.close();
+});
+
+test("13b. the same idempotency key never creates a second request", async ({ request }) => {
+  const v = await db.productVariant.findFirstOrThrow({ where: { externalId: "D-0003" } });
+  const ph = await db.pharmacy.findUniqueOrThrow({ where: { code: "SAL-01" } });
+  const body = { idempotencyKey: crypto.randomUUID(), pharmacyId: ph.id, fulfillment: "PICKUP", name: "Дубль", phone: "+77017654321", consent: true, locale: "ru", items: [{ variantId: v.id, quantity: 1, seenPriceKzt: 450 }] };
+  const headers = { Origin: "http://localhost:3100" };
+  const [a, b] = await Promise.all([request.post("/api/orders", { data: body, headers }), request.post("/api/orders", { data: body, headers })]);
+  const ids = [(await a.json()).publicId, (await b.json()).publicId];
+  expect(ids[0]).toBeTruthy();
+  expect(ids[0]).toBe(ids[1]);
+  expect(await db.order.count({ where: { idempotencyKey: body.idempotencyKey } })).toBe(1);
+});
+
+test("18. expired promotions are not shown as active", async ({ page }) => {
+  await page.goto("/promotions");
+  await expect(page.locator("main")).toContainText("Демо: бонус за витамин D3");
+  await expect(page.locator("main")).not.toContainText("завершённая скидка");
+  await page.goto("/promotions/demo-expired-discount");
+  await expect(page.locator("main")).toContainText("Акция завершена");
+  await page.goto("/product/magniy-b6-test-natural");
+  await expect(page.locator("main")).not.toContainText("−10%");
+});
+
+test("19. RU/KZ switching keeps the language while navigating", async ({ page }) => {
+  await page.goto("/catalog");
+  await page.getByRole("group", { name: "Язык" }).getByRole("link", { name: /Қазақша/ }).click();
+  await expect(page).toHaveURL(/\/kk\/catalog$/);
+  await expect(page.locator("html")).toHaveAttribute("lang", "kk-KZ");
+  await expect(page.locator("header")).toContainText("Дәріханалар");
+  await page.locator("header").getByRole("link", { name: "Акциялар" }).click();
+  await expect(page).toHaveURL(/\/kk\/promotions$/);
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Акциялар");
+  await page.goto("/");
+  await expect(page).toHaveURL(/\/kk$/); // remembered choice
+  await page.getByRole("group", { name: "Тіл" }).getByRole("link", { name: /Русский/ }).click();
+  await expect(page).toHaveURL(/localhost:\d+\/$/);
+  await expect(page.locator("html")).toHaveAttribute("lang", "ru-KZ");
+});

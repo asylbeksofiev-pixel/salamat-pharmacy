@@ -1,0 +1,18 @@
+# Local PostgreSQL 16 for development (alternative to scripts/db-local.sh).
+#   docker compose up -d db
+#   DATABASE_URL=postgresql://salamat:salamat@127.0.0.1:5433/salamat
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: salamat
+      POSTGRES_PASSWORD: salamat
+      POSTGRES_DB: salamat
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - salamat-pg:/var/lib/postgresql/data
+      - ./scripts/docker-init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+volumes:
+  salamat-pg:

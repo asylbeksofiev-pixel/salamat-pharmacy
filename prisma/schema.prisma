@@ -1,0 +1,586 @@
+// SALAMAT pharmacy network — data model.
+// Prices and stock depend on SKU *and* pharmacy, so they live in Price / Inventory,
+// never on Product. Names are never used as identifiers.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum PublicationStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum PrescriptionStatus {
+  PRESCRIPTION // confirmed: dispensed by prescription
+  NON_PRESCRIPTION // confirmed: over the counter
+  UNKNOWN
+}
+
+enum StockStatus {
+  IN_STOCK
+  LOW_STOCK
+  OUT_OF_STOCK
+  ON_REQUEST
+  UNKNOWN
+}
+
+enum OrderStatus {
+  NEW
+  PROCESSING
+  CONFIRMED
+  READY
+  COMPLETED
+  CANCELLED
+}
+
+enum FulfillmentMethod {
+  PICKUP
+  DELIVERY
+}
+
+enum PromotionType {
+  DISCOUNT
+  BONUS
+  OTHER
+}
+
+enum BenefitUnit {
+  KZT
+  PERCENT
+}
+
+enum RoleCode {
+  SUPER_ADMIN
+  CATALOG_MANAGER
+  BRANCH_MANAGER
+  OPERATOR
+  CONTENT_MANAGER
+}
+
+enum ImportStatus {
+  PREVIEW
+  APPLYING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum ImportRowAction {
+  CREATE
+  UPDATE
+  SKIP
+  REJECT
+}
+
+enum IssueSeverity {
+  ERROR
+  WARNING
+}
+
+enum DataSourceKind {
+  OFFICIAL_SITE
+  MANUAL
+  FILE_IMPORT
+  API
+  DEMO
+}
+
+model DataSource {
+  id         String         @id @default(cuid())
+  code       String         @unique
+  name       String
+  kind       DataSourceKind
+  url        String?
+  notes      String?
+  isDemo     Boolean        @default(false)
+  verifiedAt DateTime?
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+
+  variants    ProductVariant[]
+  prices      Price[]
+  inventories Inventory[]
+  pharmacies  Pharmacy[]
+  importJobs  ImportJob[]
+}
+
+model City {
+  id        String   @id @default(cuid())
+  slug      String   @unique
+  nameRu    String
+  nameKk    String?
+  isActive  Boolean  @default(true)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+
+  pharmacies Pharmacy[]
+}
+
+model Brand {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  products Product[]
+}
+
+model Category {
+  id            String     @id @default(cuid())
+  parentId      String?
+  parent        Category?  @relation("CategoryTree", fields: [parentId], references: [id], onDelete: Restrict)
+  children      Category[] @relation("CategoryTree")
+  nameRu        String
+  nameKk        String?
+  slug          String     @unique
+  descriptionRu String?
+  descriptionKk String?
+  iconKey       String?
+  sortOrder     Int        @default(0)
+  isActive      Boolean    @default(true)
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  products            Product[]
+  promotionCategories PromotionCategory[]
+
+  @@index([parentId])
+}
+
+model Product {
+  id                String            @id @default(cuid())
+  name              String // main trade name, e.g. "Парацетамол"
+  nameKk            String? // only a confirmed Kazakh name; otherwise the original trade name is shown
+  slug              String            @unique
+  descriptionRu     String? // only confirmed text
+  descriptionKk     String?
+  brandId           String?
+  brand             Brand?            @relation(fields: [brandId], references: [id], onDelete: SetNull)
+  manufacturer      String?
+  categoryId        String?
+  category          Category?         @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  publicationStatus PublicationStatus @default(DRAFT)
+  searchAliases     String[]          @default([]) // alternative spellings entered by staff
+  featuredAt        DateTime? // editorial pick for the home page (not "popularity")
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  variants ProductVariant[]
+
+  @@index([categoryId])
+  @@index([brandId])
+  @@index([publicationStatus])
+}
+
+model ProductVariant {
+  id                 String             @id @default(cuid())
+  productId          String
+  product            Product            @relation(fields: [productId], references: [id], onDelete: Cascade)
+  sourceId           String?
+  source             DataSource?        @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+  externalId         String? // identifier in the source system
+  salamatSku         String?            @unique // SALAMAT article number
+  barcode            String? // GTIN / EAN
+  fullName           String // exact SKU name: name + dosage + form + package
+  slug               String             @unique
+  dosage             String?
+  form               String?
+  volume             String? // volume or mass, e.g. "100 мл", "50 г"
+  packageSize        String? // as printed, e.g. "№20"
+  packageQuantity    Int?
+  prescriptionStatus PrescriptionStatus @default(UNKNOWN)
+  imageUrl           String?
+  isActive           Boolean            @default(true)
+  searchText         String             @default("") // normalised text for search, maintained by the app
+  lastVerifiedAt     DateTime?
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  prices            Price[]
+  inventories       Inventory[]
+  orderItems        OrderItem[]
+  promotionVariants PromotionVariant[]
+
+  @@unique([sourceId, externalId])
+  @@index([productId])
+  @@index([barcode])
+  @@index([form])
+  @@index([searchText(ops: raw("gin_trgm_ops"))], type: Gin, map: "ProductVariant_searchText_trgm_idx")
+}
+
+model Pharmacy {
+  id            String      @id @default(cuid())
+  code          String      @unique // pharmacy_code used in imports
+  slug          String      @unique
+  cityId        String
+  city          City        @relation(fields: [cityId], references: [id], onDelete: Restrict)
+  name          String? // optional display name; address identifies the branch otherwise
+  addressRu     String
+  addressKk     String? // only a confirmed translation
+  sourceAddress String? // address exactly as published in the source
+  phones        String[]    @default([])
+  latitude      Decimal?    @db.Decimal(9, 6)
+  longitude     Decimal?    @db.Decimal(9, 6)
+  openingHours  Json? // { mon: [{open:"09:00", close:"21:00"}], ..., sun: [] } — only confirmed schedules
+  hoursNote     String?
+  isActive      Boolean     @default(true)
+  acceptsOrders Boolean     @default(true)
+  sortOrder     Int         @default(0)
+  sourceId      String?
+  source        DataSource? @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+  verifiedAt    DateTime?
+  internalNote  String?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  prices              Price[]
+  inventories         Inventory[]
+  orders              Order[]
+  managers            AdminUserPharmacy[]
+  promotionPharmacies PromotionPharmacy[]
+
+  @@index([cityId])
+}
+
+model Inventory {
+  id              String         @id @default(cuid())
+  variantId       String
+  variant         ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  pharmacyId      String
+  pharmacy        Pharmacy       @relation(fields: [pharmacyId], references: [id], onDelete: Cascade)
+  status          StockStatus    @default(UNKNOWN)
+  quantity        Int?
+  sourceId        String?
+  source          DataSource?    @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+  sourceUpdatedAt DateTime // when the source says the figure was true
+  updatedAt       DateTime       @updatedAt
+
+  @@unique([variantId, pharmacyId])
+  @@index([pharmacyId, status])
+}
+
+model Price {
+  id              String         @id @default(cuid())
+  variantId       String
+  variant         ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  pharmacyId      String
+  pharmacy        Pharmacy       @relation(fields: [pharmacyId], references: [id], onDelete: Cascade)
+  priceKzt        Int
+  oldPriceKzt     Int? // only a real, confirmed previous price
+  sourceId        String?
+  source          DataSource?    @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+  sourceUpdatedAt DateTime
+  updatedAt       DateTime       @updatedAt
+
+  @@unique([variantId, pharmacyId])
+  @@index([pharmacyId, priceKzt])
+}
+
+model Promotion {
+  id                     String            @id @default(cuid())
+  slug                   String            @unique
+  titleRu                String
+  titleKk                String?
+  descriptionRu          String?
+  descriptionKk          String?
+  imageUrl               String?
+  type                   PromotionType
+  benefitValue           Int?
+  benefitUnit            BenefitUnit?
+  termsRu                String?
+  termsKk                String?
+  startsAt               DateTime
+  endsAt                 DateTime?
+  status                 PublicationStatus @default(DRAFT)
+  appliesToAllPharmacies Boolean           @default(false)
+  createdAt              DateTime          @default(now())
+  updatedAt              DateTime          @updatedAt
+
+  variants   PromotionVariant[]
+  categories PromotionCategory[]
+  pharmacies PromotionPharmacy[]
+
+  @@index([status, startsAt, endsAt])
+}
+
+model PromotionVariant {
+  promotionId String
+  promotion   Promotion      @relation(fields: [promotionId], references: [id], onDelete: Cascade)
+  variantId   String
+  variant     ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+
+  @@id([promotionId, variantId])
+  @@index([variantId])
+}
+
+model PromotionCategory {
+  promotionId String
+  promotion   Promotion @relation(fields: [promotionId], references: [id], onDelete: Cascade)
+  categoryId  String
+  category    Category  @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@id([promotionId, categoryId])
+}
+
+model PromotionPharmacy {
+  promotionId String
+  promotion   Promotion @relation(fields: [promotionId], references: [id], onDelete: Cascade)
+  pharmacyId  String
+  pharmacy    Pharmacy  @relation(fields: [pharmacyId], references: [id], onDelete: Cascade)
+
+  @@id([promotionId, pharmacyId])
+}
+
+model Order {
+  id               String            @id @default(cuid())
+  publicId         String            @unique
+  idempotencyKey   String            @unique
+  customerName     String
+  customerPhone    String
+  customerComment  String?
+  pharmacyId       String
+  pharmacy         Pharmacy          @relation(fields: [pharmacyId], references: [id], onDelete: Restrict)
+  fulfillment      FulfillmentMethod @default(PICKUP)
+  deliveryAddress  String?
+  status           OrderStatus       @default(NEW)
+  locale           String            @default("ru")
+  totalKzt         Int? // sum of lines with a confirmed price at submission time
+  hasUnpricedItems Boolean           @default(false)
+  consentAt        DateTime
+  consentVersion   String
+  clientIpHash     String?
+  notifiedAt       DateTime?
+  notifyError      String?
+  anonymizedAt     DateTime?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  items  OrderItem[]
+  events OrderEvent[]
+  notes  OrderNote[]
+
+  @@index([status, createdAt])
+  @@index([pharmacyId, status])
+  @@index([createdAt])
+}
+
+model OrderItem {
+  id                   String             @id @default(cuid())
+  orderId              String
+  order                Order              @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  variantId            String?
+  variant              ProductVariant?    @relation(fields: [variantId], references: [id], onDelete: SetNull)
+  nameSnapshot         String
+  skuSnapshot          String?
+  quantity             Int
+  unitPriceKzt         Int? // confirmed price at submission; null = to be confirmed by the operator
+  lineTotalKzt         Int?
+  priceUpdatedAt       DateTime?
+  stockStatusSnapshot  StockStatus        @default(UNKNOWN)
+  prescriptionSnapshot PrescriptionStatus @default(UNKNOWN)
+
+  @@index([orderId])
+  @@index([variantId])
+}
+
+model OrderEvent {
+  id          String       @id @default(cuid())
+  orderId     String
+  order       Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  fromStatus  OrderStatus?
+  toStatus    OrderStatus
+  adminUserId String?
+  adminUser   AdminUser?   @relation(fields: [adminUserId], references: [id], onDelete: SetNull)
+  note        String?
+  createdAt   DateTime     @default(now())
+
+  @@index([orderId, createdAt])
+}
+
+model OrderNote {
+  id          String     @id @default(cuid())
+  orderId     String
+  order       Order      @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  adminUserId String?
+  adminUser   AdminUser? @relation(fields: [adminUserId], references: [id], onDelete: SetNull)
+  body        String
+  createdAt   DateTime   @default(now())
+
+  @@index([orderId, createdAt])
+}
+
+model AdminUser {
+  id               String    @id @default(cuid())
+  email            String    @unique
+  name             String
+  passwordHash     String
+  isActive         Boolean   @default(true)
+  failedLoginCount Int       @default(0)
+  lockedUntil      DateTime?
+  lastLoginAt      DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  roles       AdminUserRole[]
+  pharmacies  AdminUserPharmacy[]
+  sessions    AdminSession[]
+  auditLogs   AuditLog[]
+  orderEvents OrderEvent[]
+  orderNotes  OrderNote[]
+  importJobs  ImportJob[]
+}
+
+model Role {
+  id          String   @id @default(cuid())
+  code        RoleCode @unique
+  nameRu      String
+  description String?
+
+  users AdminUserRole[]
+}
+
+model AdminUserRole {
+  adminUserId String
+  adminUser   AdminUser @relation(fields: [adminUserId], references: [id], onDelete: Cascade)
+  roleId      String
+  role        Role      @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([adminUserId, roleId])
+}
+
+model AdminUserPharmacy {
+  adminUserId String
+  adminUser   AdminUser @relation(fields: [adminUserId], references: [id], onDelete: Cascade)
+  pharmacyId  String
+  pharmacy    Pharmacy  @relation(fields: [pharmacyId], references: [id], onDelete: Cascade)
+
+  @@id([adminUserId, pharmacyId])
+}
+
+model AdminSession {
+  id          String    @id @default(cuid())
+  tokenHash   String    @unique
+  adminUserId String
+  adminUser   AdminUser @relation(fields: [adminUserId], references: [id], onDelete: Cascade)
+  expiresAt   DateTime
+  lastSeenAt  DateTime  @default(now())
+  createdAt   DateTime  @default(now())
+
+  @@index([adminUserId])
+  @@index([expiresAt])
+}
+
+model ImportJob {
+  id            String       @id @default(cuid())
+  fileName      String
+  fileType      String
+  status        ImportStatus @default(PREVIEW)
+  sourceId      String
+  source        DataSource   @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+  createdById   String?
+  createdBy     AdminUser?   @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  publishNew    Boolean      @default(false)
+  totalRows     Int          @default(0)
+  createdCount  Int          @default(0)
+  updatedCount  Int          @default(0)
+  skippedCount  Int          @default(0)
+  rejectedCount Int          @default(0)
+  errorMessage  String?
+  createdAt     DateTime     @default(now())
+  appliedAt     DateTime?
+
+  rows   ImportRow[]
+  errors ImportError[]
+
+  @@index([createdAt])
+}
+
+model ImportRow {
+  id               String           @id @default(cuid())
+  jobId            String
+  job              ImportJob        @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  rowNumber        Int
+  data             Json
+  plannedAction    ImportRowAction
+  matchedVariantId String?
+  matchRule        String?
+  resultAction     ImportRowAction?
+
+  @@index([jobId, rowNumber])
+}
+
+model ImportError {
+  id        String        @id @default(cuid())
+  jobId     String
+  job       ImportJob     @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  rowNumber Int
+  column    String?
+  code      String
+  message   String
+  rawValue  String?
+  severity  IssueSeverity @default(ERROR)
+
+  @@index([jobId, rowNumber])
+}
+
+model ContentPage {
+  id                  String            @id @default(cuid())
+  slug                String            @unique
+  titleRu             String
+  titleKk             String?
+  bodyRu              String // Markdown, rendered without raw HTML
+  bodyKk              String?
+  metaDescriptionRu   String?
+  metaDescriptionKk   String?
+  status              PublicationStatus @default(PUBLISHED)
+  requiresLegalReview Boolean           @default(false)
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+}
+
+model FAQItem {
+  id          String   @id @default(cuid())
+  questionRu  String
+  questionKk  String?
+  answerRu    String
+  answerKk    String?
+  sortOrder   Int      @default(0)
+  isPublished Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model SiteSetting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
+}
+
+model AuditLog {
+  id          String     @id @default(cuid())
+  adminUserId String?
+  adminUser   AdminUser? @relation(fields: [adminUserId], references: [id], onDelete: SetNull)
+  action      String
+  entityType  String
+  entityId    String?
+  summary     String?
+  diff        Json?
+  createdAt   DateTime   @default(now())
+
+  @@index([createdAt])
+  @@index([entityType, entityId])
+}
+
+model RateLimitBucket {
+  key         String   @id
+  windowStart DateTime
+  count       Int
+}

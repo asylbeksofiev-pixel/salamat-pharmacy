@@ -1,0 +1,116 @@
+@import "tailwindcss";
+
+/* SALAMAT design tokens — see docs/design-system.md.
+   Logo colours sampled from the official PNG: green #009846, red #E31E24.
+   #009846 has 3.8:1 contrast with white, so interactive green (buttons, links) uses #007A3D (5.5:1). */
+@theme {
+  --font-sans: "Onest Variable", "Onest", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+
+  --color-brand-50: #eef8f1;
+  --color-brand-100: #d7efdf;
+  --color-brand-200: #afdfbf;
+  --color-brand-300: #7ccb98;
+  --color-brand-500: #009846; /* logo green: decorative, large elements */
+  --color-brand-600: #007a3d; /* primary action, links */
+  --color-brand-700: #00662f; /* hover */
+  --color-brand-800: #245b2c; /* deep green from salamatfarmacia.kz */
+  --color-brand-900: #173d1d;
+
+  --color-accent-50: #fdecec;
+  --color-accent-100: #fbd5d6;
+  --color-accent-500: #e31e24; /* logo red: limited accent */
+  --color-accent-600: #c8161d; /* red text and critical states */
+  --color-accent-700: #a3121a;
+
+  --color-ink: #14231a;
+  --color-ink-soft: #33443a;
+  --color-muted: #56645b;
+  --color-line: #e1e8e3;
+  --color-line-strong: #c9d4cc;
+  --color-surface: #f4f7f5;
+  --color-canvas: #ffffff;
+
+  --color-warn-50: #fff6e0;
+  --color-warn-200: #f6dc9a;
+  --color-warn-700: #8a5a00;
+  --color-info-50: #eaf2fb;
+  --color-info-700: #1f5a96;
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+  --radius-2xl: 28px;
+
+  --shadow-card: 0 1px 2px rgb(20 35 26 / 0.06), 0 4px 16px rgb(20 35 26 / 0.05);
+  --shadow-pop: 0 10px 40px rgb(20 35 26 / 0.16);
+
+  --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    scroll-padding-top: 7rem;
+  }
+  body {
+    @apply bg-canvas text-ink antialiased;
+    font-feature-settings: "ss01" on;
+    text-rendering: optimizeLegibility;
+  }
+  :focus-visible {
+    outline: 3px solid var(--color-brand-600);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+  ::selection {
+    background: var(--color-brand-100);
+  }
+  input[type="search"]::-webkit-search-cancel-button {
+    -webkit-appearance: none;
+  }
+}
+
+@layer components {
+  .container-page {
+    @apply mx-auto w-full max-w-[1320px] px-4 sm:px-6 lg:px-8;
+  }
+  .prose-salamat {
+    @apply max-w-[70ch] text-[1.0625rem] leading-relaxed text-ink-soft;
+  }
+  .prose-salamat h2 {
+    @apply mt-8 mb-3 text-xl font-semibold text-ink;
+  }
+  .prose-salamat h3 {
+    @apply mt-6 mb-2 text-lg font-semibold text-ink;
+  }
+  .prose-salamat p {
+    @apply my-3;
+  }
+  .prose-salamat ul {
+    @apply my-3 list-disc pl-6;
+  }
+  .prose-salamat ol {
+    @apply my-3 list-decimal pl-6;
+  }
+  .prose-salamat li {
+    @apply my-1;
+  }
+  .prose-salamat a {
+    @apply font-medium text-brand-600 underline underline-offset-2 hover:text-brand-700;
+  }
+  .prose-salamat strong {
+    @apply font-semibold text-ink;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
