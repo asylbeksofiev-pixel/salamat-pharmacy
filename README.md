@@ -122,13 +122,21 @@ docs/                аудит источников, дизайн-систем�
 * `docs/data-import.md` — формат файла, правила сопоставления, API учётной системы
 * `docs/launch-checklist.md` — что нужно для запуска и результаты проверок
 
-## Развёртывание (Vercel + внешняя PostgreSQL)
+## Развёртывание (GitHub + Vercel)
 
-1. Создать базу PostgreSQL 16 (Neon, Supabase, Yandex Managed PostgreSQL и т. п.). Для serverless используйте
-   пул соединений (pgBouncer) и `?connection_limit=5` в `DATABASE_URL`.
-2. В Vercel импортировать репозиторий (корень репозитория — корень приложения).
-3. Задать переменные окружения из `.env.example`: обязательно `DATABASE_URL`, `APP_URL`, `APP_SECRET`,
-   `CRON_SECRET`; для запуска в поиск — `ALLOW_INDEXING=true`; `SHOW_DEMO_DATA` не задавать.
-4. Сборка выполняет `prisma migrate deploy && next build` (`vercel.json`), ежедневный cron
-   `/api/cron/retention` обезличивает старые заявки.
-5. После первого деплоя один раз выполнить `npm run db:seed` и `npm run admin:create` с production-`DATABASE_URL`.
+1. Загрузить репозиторий на GitHub.
+2. В Vercel: **Add New → Project → Import** этого репозитория (настройки сборки берутся из `vercel.json`).
+3. В проекте Vercel: **Storage → Create Database → Neon (Postgres)** и подключить к проекту — Vercel сам добавит
+   `DATABASE_URL` (пул) и `DATABASE_URL_UNPOOLED` (прямое подключение для миграций).
+   Подойдёт и любая другая PostgreSQL 16: тогда задайте `DATABASE_URL` вручную.
+4. **Settings → Environment Variables** (Production):
+   * `APP_URL` — адрес сайта, например `https://salamat-pharmacy.vercel.app` (позже — свой домен);
+   * `APP_SECRET` и `CRON_SECRET` — случайные строки (например, `openssl rand -hex 32`);
+   * `ADMIN_EMAIL`, `ADMIN_PASSWORD` (≥ 10 символов, буквы и цифры), `ADMIN_NAME` — первый Super Admin;
+   * `ALLOW_INDEXING=true` — только когда сайт готов к запуску; `SHOW_DEMO_DATA` не задавать.
+5. **Deployments → Redeploy.** Сборка выполняет `prisma migrate deploy`, затем идемпотентный `prisma db seed`
+   (филиалы, категории, страницы, роли, первый администратор; уже существующие записи не перезаписываются) и
+   `next build`. Ежедневный cron `/api/cron/retention` обезличивает старые заявки.
+6. Войти в `/admin` с `ADMIN_EMAIL`, после этого `ADMIN_PASSWORD` можно удалить из переменных Vercel.
+
+Каждый push в основную ветку GitHub автоматически публикует новую версию.
