@@ -11,4 +11,6 @@ export default function setup() {
   run(`npx prisma db execute --url "${url}" --stdin`, "DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public;");
   run("npx prisma migrate deploy");
   run("npx tsx prisma/seed.ts");
+  // Stand-in for the production catalogue table (not managed by Prisma migrations).
+  run(`npx prisma db execute --url "${url}" --file tests/fixtures/pharmacy_products.sql`);
 }

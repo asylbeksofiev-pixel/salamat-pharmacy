@@ -37,8 +37,51 @@ test("3-4. search finds by part of the name and keeps dosages apart", async ({ p
   await box.press("Enter");
   await expect(page).toHaveURL(/\/search\?q=/);
   const titles = await page.locator("main article h3").allTextContents();
-  expect(titles).toEqual(expect.arrayContaining(["Парацетамол 200 мг №10 табл.", "Парацетамол 500 мг №10 табл.", "Парацетамол 500 мг №20 табл.", "Парацетамол сироп 120 мг/5 мл 100 мл"]));
-  expect(new Set(titles).size).toBe(titles.length);
+  expect(titles.sort()).toEqual(["ПАРАЦЕТАМОЛ 200 мг №10 табл.", "Парацетамол 500 мг №10 табл.", "Парацетамол 500 мг №20 табл."].sort());
+  await expect(page.locator("main")).toContainText("Найдено товаров: 3");
+});
+
+test("catalogue: totals, pagination, item by id, same article stays separate, no invented prices", async ({ page }) => {
+  const total = Number((await db.$queryRaw<{ n: bigint }[]>`SELECT count(*) AS n FROM public.pharmacy_products`)[0].n);
+  await page.goto("/catalog");
+  await expect(page.locator("main")).toContainText(`Товаров: ${total}`);
+  const page1 = await page.locator("main article").evaluateAll((els) => els.map((e) => e.getAttribute("data-item-id")));
+  expect(page1).toHaveLength(24);
+  await page.getByRole("navigation", { name: "Страницы" }).getByRole("link", { name: /Далее/ }).click();
+  await expect(page).toHaveURL(/page=2/);
+  const page2 = await page.locator("main article").evaluateAll((els) => els.map((e) => e.getAttribute("data-item-id")));
+  expect(page2).toHaveLength(24);
+  expect(page1.filter((id) => page2.includes(id))).toEqual([]);
+  // No fake prices, stock or cart for products without data.
+  const main = page.locator("main");
+  await expect(main).not.toContainText(/\b0\s?₸/);
+  await expect(main).not.toContainText("Есть в наличии");
+  await expect(main.getByRole("button", { name: "В корзину" })).toHaveCount(0);
+  // Same article → two separate cards, each opening its own id.
+  await page.goto("/catalog?q=DUP-001");
+  await expect(main).toContainText("Найдено товаров: 2");
+  const ids = await main.locator("article").evaluateAll((els) => els.map((e) => e.getAttribute("data-item-id")));
+  expect(new Set(ids).size).toBe(2);
+  await main.getByRole("link", { name: "Бинт стерильный 7 м × 14 см" }).click();
+  await expect(page).toHaveURL(new RegExp(`/catalog/item/(${ids.join("|")})$`));
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Бинт стерильный 7 м × 14 см");
+  await expect(main).toContainText("Артикул: DUP-001");
+  await expect(main).toContainText("Цена уточняется");
+  await expect(main).toContainText("Наличие уточняется");
+  // Unknown id → 404, empty search → clear empty state.
+  expect((await page.goto("/catalog/item/999999999999"))?.status()).toBe(404);
+  await page.goto("/catalog?q=zzzzqqqq");
+  await expect(main).toContainText("ничего не найдено");
+});
+
+test("catalogue API never exposes database credentials", async ({ request }) => {
+  const res = await request.get("/api/catalog/items?q=%D0%BF%D0%B0%D1%80%D0%B0&pageSize=500");
+  expect(res.status()).toBe(200);
+  const body = await res.json();
+  expect(body.pageSize).toBe(48);
+  expect(body.items.length).toBe(3);
+  expect(JSON.stringify(body)).not.toMatch(/postgres|DATABASE_URL|password/i);
+  expect((await request.get("/api/catalog/items/abc")).status()).toBe(400);
 });
 
 test("5. filters apply and are kept in the URL", async ({ page }) => {
@@ -190,6 +233,7 @@ test("buttons keep working before JavaScript has loaded (slow networks)", async 
   await page.locator("header").getByRole("combobox").fill("парацетамол");
   await page.locator("header").getByRole("button", { name: "Найти" }).click();
   await expect(page).toHaveURL(/\/search\?q=/);
-  await expect(page.locator("main")).toContainText("Парацетамол 500 мг №20 табл.");
+  // Results are in the server HTML (revealed by a tiny inline script when JavaScript is on).
+  expect(await page.content()).toContain("Парацетамол 500 мг №20 табл.");
   await ctx.close();
 });

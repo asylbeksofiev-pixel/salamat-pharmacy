@@ -19,7 +19,8 @@
     "import:file": "tsx --conditions=react-server scripts/import-file.ts",
     "orders:anonymize": "tsx --conditions=react-server scripts/anonymize-orders.ts",
     "templates:build": "tsx scripts/make-templates.ts",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "db:catalog-fixture": "node scripts/catalog-fixture.mjs"
   },
   "dependencies": {
     "@fontsource-variable/onest": "^5.3.1",

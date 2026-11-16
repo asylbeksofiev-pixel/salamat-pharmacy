@@ -13,6 +13,7 @@ const run = (cmd, input) => execSync(cmd, { env: { ...env, NODE_ENV: "developmen
 run(`npx prisma db execute --url "${url}" --stdin`, "DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public;");
 run("npx prisma migrate deploy");
 run("npx tsx prisma/seed.ts");
+run(`npx prisma db execute --url "${url}" --file tests/fixtures/pharmacy_products.sql`);
 run("npx tsx --conditions=react-server scripts/seed-demo.ts");
 if (!existsSync(".next/BUILD_ID")) run("npx next build");
 const child = spawn("npx", ["next", "start", "-p", port], { env, stdio: "inherit" });

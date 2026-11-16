@@ -103,15 +103,15 @@ export function CatalogView({
             <EmptyState
               icon="search"
               title={t.catalog.emptyTitle}
-              text={active ? t.catalog.emptyFiltered : filters.q ? t.search.nothingFoundHint : t.catalog.emptyCatalog}
+              text={active ? t.catalog.emptyFiltered : filters.q ? t.search.nothingFoundHint : t.items.categoryPending}
               action={
                 active ? (
                   <ButtonLink href={`${basePath}${filters.q ? `?q=${encodeURIComponent(filters.q)}` : ""}`} variant="outline">
                     {t.catalog.resetFilters}
                   </ButtonLink>
                 ) : (
-                  <ButtonLink href={localizedPath(locale, "/catalog")} variant="outline">
-                    {t.catalog.allCategories}
+                  <ButtonLink href={localizedPath(locale, "/catalog")}>
+                    {t.items.allProducts}
                   </ButtonLink>
                 )
               }

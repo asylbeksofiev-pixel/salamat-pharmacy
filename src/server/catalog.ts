@@ -8,6 +8,7 @@ import { computeOffer, type Offer, type PrescriptionValue, type StockStatusValue
 import { escapeLike, fixKeyboardLayout, normalizeSearchText, tokenize } from "@/lib/search-normalize";
 import type { Locale } from "@/lib/i18n";
 import { pickLocalized } from "@/lib/i18n";
+import { suggestCatalogItems } from "./catalog-items";
 
 export const PAGE_SIZE = 24;
 
@@ -429,6 +430,20 @@ export async function suggest(q: string, locale: Locale): Promise<{ items: Sugge
       })),
     ];
   };
+  // Real assortment first (public.pharmacy_products), one suggestion per unique id.
+  const prefix = locale === "kk" ? "/kk" : "";
+  const catalog = await suggestCatalogItems(q, 7);
+  const catalogItems: Suggestion[] = catalog.items.map((i) => ({
+    type: "variant",
+    label: i.name,
+    sublabel: i.article ? `Артикул: ${i.article}` : undefined,
+    href: `${prefix}/catalog/item/${i.id}`,
+  }));
+  if (catalogItems.length) {
+    const cats = (await run(catalog.query)).filter((s) => s.type === "category");
+    return { items: [...cats, ...catalogItems], query: catalog.query };
+  }
+  // Structured products (used once SKU-level data with prices is imported).
   let items = await run(q);
   let query = q;
   if (!items.length) {
