@@ -41,7 +41,15 @@ export default async function CatalogItemPage({ params }: PageProps<"/[locale]/c
       />
       <div className="mt-6 grid gap-6 md:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:gap-8">
         <div className="mx-auto w-full max-w-[18rem] self-start md:max-w-none">
-          <ProductImage src={item.imageUrl} alt={item.name} noImageLabel={t.product.noImage} className="rounded-[var(--radius-2xl)] border border-line" priority sizes="(max-width: 768px) 100vw, 40vw" />
+          {item.imageUrl ? (
+            <ProductImage src={item.imageUrl} alt={item.name} noImageLabel={t.product.noImage} className="rounded-[var(--radius-2xl)] border border-line" priority sizes="(max-width: 768px) 100vw, 40vw" />
+          ) : (
+            // Compact placeholder until real photos arrive, so price and actions stay above the fold on phones.
+            <div className="flex h-28 flex-col items-center justify-center gap-1.5 rounded-[var(--radius-2xl)] border border-line bg-gradient-to-br from-surface to-brand-50/60 text-brand-300 md:aspect-square md:h-auto" role="img" aria-label={`${item.name}. ${t.product.noImage}`}>
+              <Icon name="box" size={34} strokeWidth={1.3} />
+              <span className="text-xs font-medium text-muted">{t.product.noImage}</span>
+            </div>
+          )}
         </div>
         <div className="flex min-w-0 flex-col gap-6">
           <div>
