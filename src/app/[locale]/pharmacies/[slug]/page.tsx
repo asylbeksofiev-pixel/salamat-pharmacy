@@ -6,6 +6,7 @@ import { WEEKDAYS } from "@/lib/hours";
 import { getPharmacyBySlug, getSelectedPharmacy, routeLinks } from "@/server/pharmacies";
 import { pageMetadata } from "@/server/seo";
 import { env } from "@/server/env";
+import { getStorefrontState } from "@/server/storefront";
 import { Breadcrumbs } from "@/components/ui/Breadcrumbs";
 import { Badge, Notice } from "@/components/ui/Feedback";
 import { SelectPharmacyButton } from "@/components/catalog/SelectPharmacyButton";
@@ -24,7 +25,7 @@ export default async function PharmacyPage({ params }: PageProps<"/[locale]/phar
   const { locale, slug } = await params;
   if (!isLocale(locale)) notFound();
   const t = getDictionary(locale);
-  const [p, selected] = await Promise.all([getPharmacyBySlug(slug, locale), getSelectedPharmacy(locale)]);
+  const [p, selected, store] = await Promise.all([getPharmacyBySlug(slug, locale), getSelectedPharmacy(locale), getStorefrontState()]);
   if (!p) notFound();
   const routes = routeLinks(p);
   const days = t.pharmacy.weekdays.split(",");
@@ -59,7 +60,7 @@ export default async function PharmacyPage({ params }: PageProps<"/[locale]/phar
               </div>
             ) : null}
           </div>
-          {!p.acceptsOrders ? <Notice tone="warning">{t.pharmacy.notAcceptingOrders}</Notice> : null}
+          {store.orderingEnabled && !p.acceptsOrders ? <Notice tone="warning">{t.pharmacy.notAcceptingOrders}</Notice> : null}
           <div className="flex flex-wrap gap-2">
             <SelectPharmacyButton id={p.id} selected={selected?.id === p.id} />
             <a href={routes.twoGis} target="_blank" rel="noopener noreferrer" className="inline-flex h-11 items-center gap-2 rounded-[var(--radius-md)] border border-line-strong px-4 font-semibold hover:border-brand-600">

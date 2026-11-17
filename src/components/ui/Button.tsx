@@ -9,8 +9,8 @@ export type ButtonSize = "sm" | "md" | "lg";
 const base =
   "inline-flex items-center justify-center gap-2 rounded-[var(--radius-md)] font-semibold select-none whitespace-nowrap " +
   "transition-[background-color,border-color,color,box-shadow,transform] duration-150 ease-[var(--ease-out-soft)] " +
-  "focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-brand-600 active:translate-y-px " +
-  "disabled:cursor-not-allowed disabled:opacity-55 disabled:active:translate-y-0 aria-disabled:cursor-not-allowed aria-disabled:opacity-55";
+  "focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-brand-600 motion-safe:active:scale-[0.97] " +
+  "disabled:cursor-not-allowed disabled:opacity-55 disabled:active:scale-100 aria-disabled:cursor-not-allowed aria-disabled:opacity-55";
 
 const variants: Record<ButtonVariant, string> = {
   primary: "bg-brand-600 text-white hover:bg-brand-700 shadow-[0_1px_0_rgb(0_0_0/0.08)]",

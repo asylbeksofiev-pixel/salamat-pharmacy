@@ -36,9 +36,11 @@ test("3-4. search finds by part of the name and keeps dosages apart", async ({ p
   await expect(page.getByRole("listbox")).toContainText("Парацетамол 500 мг №20 табл.");
   await box.press("Enter");
   await expect(page).toHaveURL(/\/search\?q=/);
+  // Wait for the results to stream in before reading them.
+  await expect(page.locator("main")).toContainText("Найдено товаров: 3");
+  await expect(page.locator("main article h3")).toHaveCount(3);
   const titles = await page.locator("main article h3").allTextContents();
   expect(titles.sort()).toEqual(["ПАРАЦЕТАМОЛ 200 мг №10 табл.", "Парацетамол 500 мг №10 табл.", "Парацетамол 500 мг №20 табл."].sort());
-  await expect(page.locator("main")).toContainText("Найдено товаров: 3");
 });
 
 test("catalogue: totals, pagination, item by id, same article stays separate, no invented prices", async ({ page }) => {
@@ -72,6 +74,22 @@ test("catalogue: totals, pagination, item by id, same article stays separate, no
   expect((await page.goto("/catalog/item/999999999999"))?.status()).toBe(404);
   await page.goto("/catalog?q=zzzzqqqq");
   await expect(main).toContainText("ничего не найдено");
+});
+
+test("favourites: the heart on a catalogue card saves the product and the favourites page shows it", async ({ page }) => {
+  await page.goto("/catalog?q=DUP-001");
+  const main = page.locator("main");
+  await expect(main).toContainText("Найдено товаров: 2");
+  const card = main.locator("article").first();
+  const id = await card.getAttribute("data-item-id");
+  const name = (await card.locator("h3").textContent())?.trim() ?? "";
+  await card.getByRole("button", { name: "Добавить в избранное" }).click();
+  await expect(card.getByRole("button", { name: "Убрать из избранного" })).toHaveAttribute("aria-pressed", "true");
+  await page.goto("/favorites");
+  await expect(main.locator(`article[data-item-id="${id}"]`)).toBeVisible();
+  await expect(main.locator(`article[data-item-id="${id}"] h3`)).toHaveText(name);
+  await main.getByRole("button", { name: "Убрать из избранного" }).click();
+  await expect(main).toContainText("В избранном пока ничего нет");
 });
 
 test("catalogue API never exposes database credentials", async ({ request }) => {

@@ -9,6 +9,7 @@ import { getPharmacies, getSelectedPharmacy } from "@/server/pharmacies";
 import { getSettings } from "@/server/settings";
 import { env } from "@/server/env";
 import { prisma } from "@/server/db";
+import { getStorefrontState } from "@/server/storefront";
 import { SiteProvider, type PickerPharmacy } from "@/components/site/SiteProvider";
 import { Header } from "@/components/site/Header";
 import { Footer } from "@/components/site/Footer";
@@ -52,12 +53,13 @@ export default async function LocaleLayout({ children, params }: LayoutProps<"/[
   if (!isLocale(raw)) notFound();
   const locale: Locale = raw;
   const t = getDictionary(locale);
-  const [tree, pharmacies, selected, settings, city] = await Promise.all([
+  const [tree, pharmacies, selected, settings, city, store] = await Promise.all([
     getCategoryTree(locale),
     getPharmacies(locale),
     getSelectedPharmacy(locale),
     getSettings(),
     prisma.city.findFirst({ where: { isActive: true }, orderBy: { sortOrder: "asc" } }),
+    getStorefrontState(),
   ]);
   const toPicker = (p: (typeof pharmacies)[number]): PickerPharmacy => ({
     id: p.id,
@@ -67,7 +69,15 @@ export default async function LocaleLayout({ children, params }: LayoutProps<"/[
     open: p.openStatus ? p.openStatus.open : null,
     acceptsOrders: p.acceptsOrders,
   });
-  const categories = tree.roots.map((c) => ({ slug: c.slug, name: c.name, iconKey: c.iconKey, children: c.children.map((x) => ({ slug: x.slug, name: x.name })) }));
+  // Navigation lists only sections that contain products; with no category data the catalogue is one list.
+  const categories = tree.roots
+    .filter((c) => store.categoryIdsWithProducts.has(c.id))
+    .map((c) => ({
+      slug: c.slug,
+      name: c.name,
+      iconKey: c.iconKey,
+      children: c.children.filter((x) => store.categoryIdsWithProducts.has(x.id)).map((x) => ({ slug: x.slug, name: x.name })),
+    }));
   const cityName = city ? (locale === "kk" ? (city.nameKk ?? city.nameRu) : city.nameRu) : t.header.cityAstana;
 
   return (
@@ -83,6 +93,7 @@ export default async function LocaleLayout({ children, params }: LayoutProps<"/[
           pharmacies={pharmacies.map(toPicker)}
           helpline={settings.helpline.phone}
           showDemo={env.showDemoData}
+          orderingEnabled={store.orderingEnabled}
         >
           {env.showDemoData ? (
             <div className="bg-warn-50 text-warn-700">
@@ -99,7 +110,7 @@ export default async function LocaleLayout({ children, params }: LayoutProps<"/[
               <div>{children}</div>
             </ViewTransition>
           </main>
-          <Footer locale={locale} t={t} helpline={settings.helpline.phone} company={settings.company} categories={categories} />
+          <Footer locale={locale} t={t} helpline={settings.helpline.phone} company={settings.company} categories={categories} orderingEnabled={store.orderingEnabled} />
           <MobileBottomNav />
         </SiteProvider>
       </body>

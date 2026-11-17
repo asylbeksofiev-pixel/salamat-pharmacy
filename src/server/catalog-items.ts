@@ -192,6 +192,16 @@ export async function getCatalogItem(id: string): Promise<CatalogItem | null> {
   return rows[0] ? toItem(rows[0]) : null;
 }
 
+/** Items for the favourites page, in the given order; unknown ids are skipped. */
+export async function listCatalogItemsByIds(ids: string[]): Promise<CatalogItem[]> {
+  const valid = Array.from(new Set(ids.filter(isCatalogId))).slice(0, 100);
+  if (!valid.length) return [];
+  const columns = await optionalColumns();
+  const rows = await prisma.$queryRaw<Row[]>`SELECT ${selectList(columns)} FROM ${TABLE} WHERE "id" IN (${Prisma.join(valid.map((id) => BigInt(id)))})`;
+  const byId = new Map(rows.map((r) => [r.id, toItem(r)]));
+  return valid.map((id) => byId.get(id)).filter((x): x is CatalogItem => !!x);
+}
+
 /** Up to `limit` matches for the header search suggestions. */
 export async function suggestCatalogItems(q: string, limit = 7): Promise<{ items: CatalogItem[]; query: string }> {
   const res = await listCatalogItems({ q, page: 1, pageSize: limit });

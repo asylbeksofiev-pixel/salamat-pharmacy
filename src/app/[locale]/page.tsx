@@ -9,6 +9,8 @@ import { getPharmacies, getSelectedPharmacy, routeLinks } from "@/server/pharmac
 import { getActivePromotions } from "@/server/promotions";
 import { featuredItems } from "@/server/products";
 import { getSettings } from "@/server/settings";
+import { getStorefrontState } from "@/server/storefront";
+import { CatalogSearchForm } from "@/components/catalog/CatalogItems";
 import { pageMetadata } from "@/server/seo";
 import { SearchBox } from "@/components/site/SearchBox";
 import { CategoryTile, PharmacyCard, PromotionCard } from "@/components/catalog/Tiles";
@@ -38,13 +40,17 @@ export default async function HomePage({ params }: PageProps<"/[locale]">) {
   const { locale } = await params;
   if (!isLocale(locale)) notFound();
   const t = getDictionary(locale);
-  const [tree, pharmacies, selected, promotions, settings] = await Promise.all([
+  const [tree, pharmacies, selected, promotions, settings, store] = await Promise.all([
     getCategoryTree(locale),
     getPharmacies(locale),
     getSelectedPharmacy(locale),
     getActivePromotions(locale),
     getSettings(),
+    getStorefrontState(),
   ]);
+  // Only sections that really contain products; with no categorised products the block becomes a catalogue entry.
+  const roots = tree.roots.filter((c) => store.categoryIdsWithProducts.has(c.id));
+  const numberLocale = locale === "kk" ? "kk-KZ" : "ru-KZ";
   const featured = await featuredItems(locale, selected?.id ?? null);
   const href = (p: string) => localizedPath(locale, p);
   const shownPharmacies = selected ? [selected, ...pharmacies.filter((p) => p.id !== selected.id)].slice(0, 6) : pharmacies.slice(0, 6);
@@ -108,34 +114,57 @@ export default async function HomePage({ params }: PageProps<"/[locale]">) {
             </div>
             <div className="absolute right-0 bottom-[14%] flex items-center gap-3 rounded-[var(--radius-lg)] bg-white px-4 py-3 shadow-[var(--shadow-pop)]">
               <span className="grid size-10 place-items-center rounded-full bg-accent-50 text-accent-600">
-                <Icon name="store" size={20} />
+                <Icon name={store.orderingEnabled ? "store" : "phone"} size={20} />
               </span>
-              <span className="text-sm font-semibold">{t.checkout.pickup}</span>
+              <span className="text-sm font-semibold">{store.orderingEnabled ? t.checkout.pickup : t.items.ask}</span>
             </div>
           </div>
         </div>
       </section>
 
-      {/* Categories */}
-      <section aria-labelledby="h-cat" className="container-page py-12">
-        <SectionTitle
-          id="h-cat"
-          title={t.home.categoriesTitle}
-          action={
-            <Link href={href("/catalog")} className="hidden items-center gap-1 text-sm font-semibold text-brand-700 hover:underline sm:inline-flex">
-              {t.catalog.allCategories}
-              <Icon name="chevronRight" size={16} />
-            </Link>
-          }
-        />
-        <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {tree.roots.map((c) => (
-            <li key={c.slug}>
-              <CategoryTile slug={c.slug} name={c.name} iconKey={c.iconKey} locale={locale} />
-            </li>
-          ))}
-        </ul>
-      </section>
+      {roots.length ? (
+        <section aria-labelledby="h-cat" className="container-page py-12">
+          <SectionTitle
+            id="h-cat"
+            title={t.home.categoriesTitle}
+            action={
+              <Link href={href("/catalog")} className="hidden items-center gap-1 text-sm font-semibold text-brand-700 hover:underline sm:inline-flex">
+                {t.catalog.allCategories}
+                <Icon name="chevronRight" size={16} />
+              </Link>
+            }
+          />
+          <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {roots.map((c) => (
+              <li key={c.slug}>
+                <CategoryTile slug={c.slug} name={c.name} iconKey={c.iconKey} locale={locale} />
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : (
+        /* No categories in the data yet: a clear way into the full catalogue instead of empty sections. */
+        <section aria-labelledby="h-cat" className="container-page py-10 md:py-12">
+          <div className="flex flex-col gap-5 rounded-[var(--radius-2xl)] border border-line bg-white p-5 shadow-[var(--shadow-card)] sm:p-8 md:flex-row md:items-center md:justify-between md:gap-8">
+            <div className="min-w-0">
+              <h2 id="h-cat" className="text-2xl font-bold tracking-tight text-ink sm:text-[1.75rem]">
+                {t.home.catalogTitle}
+              </h2>
+              {store.catalogTotal ? (
+                <p className="mt-1 font-semibold text-brand-700">{fmt(t.home.catalogCount, { count: store.catalogTotal.toLocaleString(numberLocale) })}</p>
+              ) : null}
+              <p className="mt-2 max-w-xl text-muted">{t.home.catalogText}</p>
+            </div>
+            <div className="flex w-full flex-col gap-3 md:max-w-md">
+              <CatalogSearchForm action={href("/catalog")} q="" t={t} />
+              <Link href={href("/catalog")} className="inline-flex items-center gap-1 self-start text-sm font-semibold text-brand-700 hover:underline">
+                {t.home.catalogCta}
+                <Icon name="chevronRight" size={16} />
+              </Link>
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* Promotions: only confirmed, active ones; the block is hidden when there are none. */}
       {promotions.length ? (

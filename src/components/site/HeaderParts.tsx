@@ -98,7 +98,7 @@ export function PharmacyChip({ compact = false }: { compact?: boolean }) {
 }
 
 export function HeaderCounters() {
-  const { t, href } = useSite();
+  const { t, href, orderingEnabled } = useSite();
   const hydrated = useHydrated();
   const count = useCartCount();
   const favs = useFavorites().length;
@@ -110,23 +110,26 @@ export function HeaderCounters() {
         <Icon name="heart" />
         {f ? <span className="absolute -top-0.5 -right-0.5 grid min-w-5 place-items-center rounded-full bg-brand-600 px-1 text-[0.7rem] leading-5 font-bold text-white" aria-hidden="true">{f}</span> : null}
       </Link>
-      <Link
-        href={href("/cart")}
-        className="relative flex h-11 items-center gap-2 rounded-[var(--radius-md)] px-2.5 text-ink-soft hover:bg-surface hover:text-ink"
-        aria-label={`${t.common.cart}${c ? `. ${fmt(t.header.cartCount, { count: c })}` : ""}`}
-      >
-        <span className="relative">
-          <Icon name="cart" />
-          {c ? <span className="absolute -top-2 -right-2.5 grid min-w-5 place-items-center rounded-full bg-accent-500 px-1 text-[0.7rem] leading-5 font-bold text-white" aria-hidden="true">{c}</span> : null}
-        </span>
-        <span className="hidden text-sm font-semibold lg:inline">{t.common.cart}</span>
-      </Link>
+      {orderingEnabled ? (
+        <Link
+          href={href("/cart")}
+          className="relative flex h-11 items-center gap-2 rounded-[var(--radius-md)] px-2.5 text-ink-soft hover:bg-surface hover:text-ink"
+          aria-label={`${t.common.cart}${c ? `. ${fmt(t.header.cartCount, { count: c })}` : ""}`}
+        >
+          <span className="relative">
+            <Icon name="cart" />
+            {c ? <span className="absolute -top-2 -right-2.5 grid min-w-5 place-items-center rounded-full bg-accent-500 px-1 text-[0.7rem] leading-5 font-bold text-white" aria-hidden="true">{c}</span> : null}
+          </span>
+          <span className="hidden text-sm font-semibold lg:inline">{t.common.cart}</span>
+        </Link>
+      ) : null}
     </div>
   );
 }
 
 export function CatalogMenu({ categories }: { categories: MenuCategory[] }) {
   const { t, href } = useSite();
+  const plain = categories.length === 0;
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const pathname = usePathname();
@@ -148,6 +151,15 @@ export function CatalogMenu({ categories }: { categories: MenuCategory[] }) {
       document.removeEventListener("keydown", onKey);
     };
   }, [open]);
+  if (plain) {
+    // No category data yet: the catalogue is a single searchable list.
+    return (
+      <Link href={href("/catalog")} className="hidden h-12 items-center gap-2 rounded-[var(--radius-lg)] bg-brand-600 px-4 font-semibold text-white transition-colors hover:bg-brand-700 active:scale-[0.98] md:flex">
+        <Icon name="grid" size={20} />
+        {t.common.catalog}
+      </Link>
+    );
+  }
   return (
     <div ref={ref} className="relative hidden md:block">
       <a
@@ -217,6 +229,10 @@ export function MobileMenu({ categories }: { categories: MenuCategory[] }) {
           <LanguageSwitcher className="self-start" />
           <nav aria-label={t.common.catalog}>
             <p className="mb-2 text-xs font-bold tracking-wider text-muted uppercase">{t.common.catalog}</p>
+            <Link href={href("/catalog")} className="flex items-center gap-3 rounded-[var(--radius-md)] px-2 py-2.5 font-semibold text-brand-800 hover:bg-surface">
+              <Icon name="grid" size={20} className="text-brand-600" />
+              {t.items.allProducts}
+            </Link>
             <ul className="flex flex-col">
               {categories.map((c) => (
                 <li key={c.slug}>
@@ -254,7 +270,7 @@ export function MobileMenu({ categories }: { categories: MenuCategory[] }) {
 }
 
 export function MobileBottomNav() {
-  const { t, href, locale } = useSite();
+  const { t, href, locale, orderingEnabled } = useSite();
   const pathname = usePathname() || "/";
   const hydrated = useHydrated();
   const count = useCartCount();
@@ -265,11 +281,13 @@ export function MobileBottomNav() {
     { href: "/catalog", label: t.common.catalog, icon: "grid" as const, match: (p: string) => p.startsWith("/catalog") || p.startsWith("/product") || p.startsWith("/search") },
     { href: "/pharmacies", label: t.common.pharmacies, icon: "store" as const, match: (p: string) => p.startsWith("/pharmacies") },
     { href: "/favorites", label: t.common.favorites, icon: "heart" as const, match: (p: string) => p.startsWith("/favorites"), badge: hydrated ? favs : 0 },
-    { href: "/cart", label: t.common.cart, icon: "cart" as const, match: (p: string) => p.startsWith("/cart") || p.startsWith("/checkout"), badge: hydrated ? count : 0 },
+    ...(orderingEnabled
+      ? [{ href: "/cart", label: t.common.cart, icon: "cart" as const, match: (p: string) => p.startsWith("/cart") || p.startsWith("/checkout"), badge: hydrated ? count : 0 }]
+      : []),
   ];
   return (
     <nav aria-label={t.common.menu} style={{ viewTransitionName: "bottom-nav" }} className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden" lang={locale}>
-      <ul className="grid grid-cols-5">
+      <ul className={cn("grid", items.length === 5 ? "grid-cols-5" : "grid-cols-4")}>
         {items.map((it) => {
           const active = it.match(path);
           return (

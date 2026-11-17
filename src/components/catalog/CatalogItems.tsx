@@ -10,62 +10,85 @@ import { Pagination } from "../ui/Pagination";
 import { EmptyState, ErrorState, Notice } from "../ui/Feedback";
 import { ButtonLink } from "../ui/Button";
 import { Icon } from "../icons";
-import { ProductImage } from "./ProductImage";
+import { FavoriteButton } from "./OfferActions";
 
 export function catalogItemHref(locale: Locale, id: string) {
   return localizedPath(locale, `/catalog/item/${id}`);
 }
 
 export function ItemPrice({ item, t, locale, size = "md" }: { item: CatalogItem; t: Dictionary; locale: Locale; size?: "md" | "lg" }) {
-  if (item.price === null) return <p className={size === "lg" ? "text-xl font-semibold text-muted" : "text-base font-semibold text-muted"}>{t.offer.priceUnknown}</p>;
-  return <p className={size === "lg" ? "text-3xl font-bold text-ink" : "text-xl font-bold text-ink"}>{formatKzt(item.price, locale)}</p>;
+  if (item.price === null) return <p className={size === "lg" ? "text-lg font-semibold text-ink-soft" : "text-sm font-semibold text-ink-soft"}>{t.offer.priceUnknown}</p>;
+  return <p className={size === "lg" ? "text-3xl font-bold text-ink tabular-nums" : "text-lg font-bold text-ink tabular-nums"}>{formatKzt(item.price, locale)}</p>;
 }
 
-export function ItemStock({ item, t }: { item: CatalogItem; t: Dictionary }) {
+export function ItemStock({ item, t, size = "md" }: { item: CatalogItem; t: Dictionary; size?: "md" | "lg" }) {
+  const cls = size === "lg" ? "text-base" : "text-sm";
   if (item.stockQuantity === null)
     return (
-      <p className="flex items-center gap-1.5 text-sm font-semibold text-muted">
-        <Icon name="question" size={17} />
+      <p className={`flex items-center gap-1.5 font-medium text-muted ${cls}`}>
+        <Icon name="question" size={size === "lg" ? 18 : 16} className="shrink-0" />
         {t.offer.stockUnknown}
       </p>
     );
   const inStock = item.stockQuantity > 0;
   return (
-    <p className={`flex items-center gap-1.5 text-sm font-semibold ${inStock ? "text-brand-700" : "text-accent-600"}`}>
-      <Icon name={inStock ? "checkCircle" : "xCircle"} size={17} />
+    <p className={`flex items-center gap-1.5 font-semibold ${cls} ${inStock ? "text-brand-700" : "text-accent-600"}`}>
+      <Icon name={inStock ? "checkCircle" : "xCircle"} size={size === "lg" ? 18 : 16} className="shrink-0" />
       {inStock ? t.offer.inStock : t.offer.outOfStock}
     </p>
   );
 }
 
+function ItemThumb({ item, t }: { item: CatalogItem; t: Dictionary }) {
+  if (item.imageUrl) {
+    return (
+      <div className="relative size-14 shrink-0 overflow-hidden rounded-[var(--radius-md)] border border-line bg-white">
+        {/* eslint-disable-next-line @next/next/no-img-element -- hosts of future product photos are not known yet */}
+        <img src={item.imageUrl} alt="" loading="lazy" decoding="async" className="absolute inset-0 size-full object-contain p-1" referrerPolicy="no-referrer" />
+      </div>
+    );
+  }
+  return (
+    <div className="grid size-12 shrink-0 place-items-center rounded-[var(--radius-md)] bg-brand-50 text-brand-600" role="img" aria-label={t.product.noImage}>
+      <Icon name="box" size={24} strokeWidth={1.5} />
+    </div>
+  );
+}
+
+/**
+ * Catalogue card: one per unique id. Clear hierarchy — name, article, then price/stock status.
+ * On phones a single-column compact card, on wider screens a grid card with an even rhythm.
+ */
 export function CatalogItemCard({ item, t, locale }: { item: CatalogItem; t: Dictionary; locale: Locale }) {
   const href = catalogItemHref(locale, item.id);
   return (
-    <article className="group relative flex h-full min-w-0 flex-col gap-3 rounded-[var(--radius-xl)] border border-line bg-white p-3 transition-shadow hover:shadow-[var(--shadow-card)] sm:p-4" data-item-id={item.id}>
-      {item.imageUrl ? (
-        <ProductImage src={item.imageUrl} alt={item.name} noImageLabel={t.product.noImage} />
-      ) : (
-        <div className="flex h-20 items-center justify-center rounded-[var(--radius-lg)] bg-gradient-to-br from-surface to-brand-50/60 text-brand-300" aria-hidden="true">
-          <Icon name="box" size={30} strokeWidth={1.4} />
+    <article
+      className="group relative flex h-full min-w-0 flex-col gap-3 rounded-[var(--radius-xl)] border border-line bg-white p-4 transition-[box-shadow,border-color] duration-200 hover:border-brand-200 hover:shadow-[var(--shadow-card)]"
+      data-item-id={item.id}
+    >
+      <div className="flex items-start gap-3">
+        <ItemThumb item={item} t={t} />
+        <div className="min-w-0 flex-1">
+          {item.category ? <p className="mb-0.5 text-xs font-semibold text-brand-700">{item.category}</p> : null}
+          <h3 className="text-[0.95rem] leading-snug font-semibold break-words text-ink sm:line-clamp-3 sm:min-h-[3.9em]" title={item.name}>
+            <Link href={href} className="rounded-sm after:absolute after:inset-0 after:rounded-[var(--radius-xl)] after:content-[''] hover:text-brand-700 focus-visible:outline-none">
+              {item.name}
+            </Link>
+          </h3>
+          {item.article ? (
+            <p className="mt-1 text-xs text-muted">
+              {t.items.article}: <span className="font-mono break-all text-ink-soft">{item.article}</span>
+            </p>
+          ) : null}
         </div>
-      )}
-      {item.category ? <p className="text-xs font-semibold text-brand-700">{item.category}</p> : null}
-      <div className="flex flex-1 flex-col gap-1">
-        <h3 className="text-[0.95rem] leading-snug font-semibold text-ink [overflow-wrap:anywhere] hyphens-auto">
-          <Link href={href} className="after:absolute after:inset-0 after:content-[''] hover:text-brand-700 focus-visible:outline-none">
-            {item.name}
-          </Link>
-        </h3>
-        {item.article ? (
-          <p className="text-xs text-muted">
-            {t.items.article}: <span className="font-mono text-ink-soft">{item.article}</span>
-          </p>
-        ) : null}
+        <FavoriteButton variantId={item.id} className="relative z-10 -mt-1 -mr-1 size-10 shrink-0" />
       </div>
-      <div className="flex flex-col gap-1.5">
-        <ItemPrice item={item} t={t} locale={locale} />
-        <ItemStock item={item} t={t} />
-        <span className="mt-1 inline-flex items-center gap-1 text-sm font-semibold text-brand-700 group-hover:underline" aria-hidden="true">
+      <div className="mt-auto flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-t border-line pt-3">
+        <div className="flex min-w-0 flex-col gap-0.5">
+          <ItemPrice item={item} t={t} locale={locale} />
+          <ItemStock item={item} t={t} />
+        </div>
+        <span className="inline-flex items-center gap-0.5 text-sm font-semibold text-brand-700 transition-transform duration-200 group-hover:translate-x-0.5" aria-hidden="true">
           {t.items.details}
           <Icon name="chevronRight" size={16} />
         </span>
@@ -93,7 +116,7 @@ export function CatalogSearchForm({ action, q, t }: { action: string; q: string;
           className="h-12 w-full rounded-[var(--radius-lg)] border border-line-strong bg-white pr-3 pl-11 text-[0.98rem] placeholder:text-muted/85 focus:border-brand-600 focus:outline-3 focus:outline-offset-0 focus:outline-brand-600/25"
         />
       </div>
-      <button type="submit" className="h-12 shrink-0 rounded-[var(--radius-lg)] bg-brand-600 px-5 font-semibold text-white transition-colors hover:bg-brand-700">
+      <button type="submit" className="press h-12 shrink-0 rounded-[var(--radius-lg)] bg-brand-600 px-5 font-semibold text-white hover:bg-brand-700">
         {t.header.searchSubmit}
       </button>
     </form>
@@ -164,7 +187,7 @@ export function CatalogItemsView({
           </Notice>
           {result.items.length ? (
             <>
-              <ul className="mt-5 grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 xl:grid-cols-4">
+              <ul className="anim-list mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4">
                 {result.items.map((item) => (
                   <li key={item.id} className="min-w-0">
                     <CatalogItemCard item={item} t={t} locale={locale} />

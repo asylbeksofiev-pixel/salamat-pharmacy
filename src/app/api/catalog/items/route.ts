@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { CATALOG_MAX_QUERY, listCatalogItems } from "@/server/catalog-items";
+import { CATALOG_MAX_QUERY, listCatalogItems, listCatalogItemsByIds } from "@/server/catalog-items";
 import { memoryRateLimit } from "@/server/rate-limit";
 import { clientIpFrom, hashIdentifier } from "@/server/request";
 
@@ -13,6 +13,16 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "rate_limited" }, { status: 429 });
   }
   const sp = req.nextUrl.searchParams;
+  // ?ids=1,2,3 — items for the favourites page (kept in the visitor's browser).
+  if (sp.has("ids")) {
+    const ids = (sp.get("ids") ?? "").split(",").map((s) => s.trim()).slice(0, 100);
+    try {
+      return NextResponse.json({ items: await listCatalogItemsByIds(ids) }, { headers: { "Cache-Control": "no-store" } });
+    } catch (e) {
+      console.error("catalog ids api failed", (e as Error).message.slice(0, 200));
+      return NextResponse.json({ error: "unavailable" }, { status: 503 });
+    }
+  }
   const q = (sp.get("q") ?? "").trim();
   if (q.length > CATALOG_MAX_QUERY) return NextResponse.json({ error: "query_too_long" }, { status: 400 });
   const page = /^\d{1,6}$/.test(sp.get("page") ?? "") ? Number(sp.get("page")) : 1;

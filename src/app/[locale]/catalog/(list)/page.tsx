@@ -4,6 +4,7 @@ import { getCategoryTree } from "@/server/catalog";
 import { listCatalogItems, type CatalogPage } from "@/server/catalog-items";
 import { pageMetadata } from "@/server/seo";
 import { env } from "@/server/env";
+import { getStorefrontState } from "@/server/storefront";
 import { CatalogItemsView } from "@/components/catalog/CatalogItems";
 import { CategoryTile } from "@/components/catalog/Tiles";
 
@@ -26,7 +27,8 @@ export default async function CatalogPage({ params, searchParams }: PageProps<"/
   if (!isLocale(locale)) notFound();
   const t = getDictionary(locale);
   const { q, page } = readParams(await searchParams);
-  const tree = await getCategoryTree(locale);
+  const [tree, store] = await Promise.all([getCategoryTree(locale), getStorefrontState()]);
+  const roots = tree.roots.filter((c) => store.categoryIdsWithProducts.has(c.id));
   let result: CatalogPage | null = null;
   let failed = false;
   try {
@@ -47,13 +49,13 @@ export default async function CatalogPage({ params, searchParams }: PageProps<"/
       failed={failed}
       baseUrl={env.appUrl}
       after={
-        tree.roots.length ? (
+        roots.length ? (
           <section aria-labelledby="catalog-sections" className="mt-12">
             <h2 id="catalog-sections" className="mb-4 text-xl font-bold">
               {t.items.categoriesTitle}
             </h2>
             <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {tree.roots.map((c) => (
+              {roots.map((c) => (
                 <li key={c.slug}>
                   <CategoryTile slug={c.slug} name={c.name} iconKey={c.iconKey} locale={locale} />
                 </li>

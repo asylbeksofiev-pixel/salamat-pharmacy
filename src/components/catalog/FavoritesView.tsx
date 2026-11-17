@@ -3,9 +3,11 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import type { VariantCard } from "@/server/catalog";
+import type { CatalogItem } from "@/server/catalog-items";
+import { CatalogItemCard } from "./CatalogItems";
 import { useFavorites, useHydrated } from "@/lib/client/stores";
 import { useSite } from "../site/SiteProvider";
-import { EmptyState, Skeleton } from "../ui/Feedback";
+import { EmptyState, ErrorState, Skeleton } from "../ui/Feedback";
 import { ButtonLink } from "../ui/Button";
 import { AvailabilityBadge, PriceBlock } from "./Offer";
 import { FavoriteButton, OfferActions } from "./OfferActions";
@@ -16,14 +18,27 @@ export function FavoritesView() {
   const hydrated = useHydrated();
   const ids = useFavorites();
   const [items, setItems] = useState<VariantCard[] | null>(null);
+  const [catalog, setCatalog] = useState<CatalogItem[] | null>(null);
+  const [failed, setFailed] = useState(false);
+  // Catalogue products (public.pharmacy_products) have numeric ids; SKU-level products have text ids.
   const key = ids.join(",");
   useEffect(() => {
     if (!hydrated || !key) return;
     const ctrl = new AbortController();
-    fetch(`/api/favorites?ids=${encodeURIComponent(key)}&locale=${locale}`, { signal: ctrl.signal })
-      .then((r) => r.json())
-      .then((d: { items: VariantCard[] }) => setItems(d.items))
-      .catch(() => undefined);
+    const cIds = key.split(",").filter((id) => /^\d+$/.test(id));
+    const vIds = key.split(",").filter((id) => id && !/^\d+$/.test(id));
+    Promise.all([
+      cIds.length ? fetch(`/api/catalog/items?ids=${cIds.join(",")}`, { signal: ctrl.signal }).then((r) => (r.ok ? r.json() : Promise.reject(r.status))) : { items: [] },
+      vIds.length ? fetch(`/api/favorites?ids=${encodeURIComponent(vIds.join(","))}&locale=${locale}`, { signal: ctrl.signal }).then((r) => (r.ok ? r.json() : Promise.reject(r.status))) : { items: [] },
+    ])
+      .then(([c, v]: [{ items: CatalogItem[] }, { items: VariantCard[] }]) => {
+        setCatalog(c.items);
+        setItems(v.items);
+        setFailed(false);
+      })
+      .catch((e) => {
+        if ((e as Error)?.name !== "AbortError") setFailed(true);
+      });
     return () => ctrl.abort();
   }, [key, hydrated, locale, pharmacy?.id]);
 
@@ -33,14 +48,27 @@ export function FavoritesView() {
       <div className="mt-6">
         {hydrated && !key ? (
           <EmptyState icon="heart" title={t.favorites.empty} text={t.favorites.emptyText} action={<ButtonLink href={href("/catalog")}>{t.cart.toCatalog}</ButtonLink>} />
-        ) : !hydrated || items === null ? (
+        ) : failed ? (
+          <ErrorState title={t.items.loadError} text={t.items.loadErrorText} />
+        ) : !hydrated || items === null || catalog === null ? (
           <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
             {[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-80" />)}
           </div>
-        ) : items.length === 0 ? (
+        ) : items.length === 0 && catalog.length === 0 ? (
           <EmptyState icon="heart" title={t.favorites.empty} text={t.favorites.emptyText} action={<ButtonLink href={href("/catalog")}>{t.cart.toCatalog}</ButtonLink>} />
         ) : (
-          <ul className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 xl:grid-cols-4">
+          <>
+          {catalog.length ? (
+            <ul className="anim-list grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4">
+              {catalog.map((c) => (
+                <li key={c.id} className="min-w-0">
+                  <CatalogItemCard item={c} t={t} locale={locale} />
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          {items.length ? (
+          <ul className="mt-4 grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 xl:grid-cols-4">
             {items.map((it) => {
               const link = `${href(`/product/${it.productSlug}`)}?sku=${encodeURIComponent(it.slug)}`;
               return (
@@ -59,6 +87,8 @@ export function FavoritesView() {
               );
             })}
           </ul>
+          ) : null}
+          </>
         )}
       </div>
     </div>

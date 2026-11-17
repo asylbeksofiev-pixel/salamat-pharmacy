@@ -119,10 +119,10 @@ html[data-scroll-behavior="smooth"] {
   animation-duration: 0s;
 }
 ::view-transition-old(.page) {
-  animation: 140ms ease-in both sal-fade-out;
+  animation: 110ms ease-in both sal-fade-out;
 }
 ::view-transition-new(.page) {
-  animation: 260ms var(--ease-out-soft) 60ms both sal-rise-in;
+  animation: 220ms var(--ease-out-soft) 40ms both sal-page-in;
 }
 ::view-transition-group(site-header),
 ::view-transition-group(bottom-nav),
@@ -186,6 +186,24 @@ dialog.sal-drawer-bottom[data-closing] {
   animation: 260ms var(--ease-out-soft) both sal-rise-in;
 }
 
+/* Product lists: cards fade in once with a tiny stagger for the first row(s); later cards appear together. */
+.anim-list > * {
+  animation: 240ms var(--ease-out-soft) both sal-page-in;
+}
+.anim-list > :nth-child(2) { animation-delay: 30ms; }
+.anim-list > :nth-child(3) { animation-delay: 60ms; }
+.anim-list > :nth-child(4) { animation-delay: 90ms; }
+.anim-list > :nth-child(n + 5) { animation-delay: 110ms; }
+
+/* Tactile press feedback for buttons and button-like links. */
+.press {
+  transition-property: color, background-color, border-color, box-shadow, transform;
+  transition-duration: 160ms;
+}
+.press:active {
+  transform: scale(0.97);
+}
+
 /* Accordions (<details>): smooth height where the browser supports it */
 :root {
   interpolate-size: allow-keywords;
@@ -209,6 +227,12 @@ details[open]::details-content {
 @keyframes sal-fade-out {
   to {
     opacity: 0;
+  }
+}
+@keyframes sal-page-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
   }
 }
 @keyframes sal-rise-in {
@@ -274,6 +298,9 @@ details[open]::details-content {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+  .press:active {
+    transform: none;
   }
   ::view-transition-group(*),
   ::view-transition-old(*),

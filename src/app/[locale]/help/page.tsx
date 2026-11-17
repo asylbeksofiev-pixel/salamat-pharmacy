@@ -4,22 +4,27 @@ import { formatPhone, telHref } from "@/lib/format";
 import { getFaq, getPage } from "@/server/content";
 import { getSettings } from "@/server/settings";
 import { pageMetadata } from "@/server/seo";
+import { getStorefrontState } from "@/server/storefront";
 import { ContentPageView } from "@/components/site/ContentPage";
 import { Icon } from "@/components/icons";
 
 export async function generateMetadata({ params }: PageProps<"/[locale]/help">) {
   const { locale } = await params;
   if (!isLocale(locale)) return {};
-  const page = await getPage("help", locale);
-  return pageMetadata(locale, "/help", page?.title ?? getDictionary(locale).meta.helpTitle, page?.metaDescription);
+  const [page, store] = await Promise.all([getPage("help", locale), getStorefrontState()]);
+  const t = getDictionary(locale);
+  return pageMetadata(locale, "/help", page?.title ?? t.meta.helpTitle, store.orderingEnabled ? page?.metaDescription : t.pages.helpCallDescription);
 }
 
 export default async function HelpPage({ params }: PageProps<"/[locale]/help">) {
   const { locale } = await params;
   if (!isLocale(locale)) notFound();
   const t = getDictionary(locale);
-  const [page, faq, settings] = await Promise.all([getPage("help", locale), getFaq(locale), getSettings()]);
+  const [page, dbFaq, settings, store] = await Promise.all([getPage("help", locale), getFaq(locale), getSettings(), getStorefrontState()]);
   if (!page) notFound();
+  // The stored FAQ describes online requests. While requests are unavailable (no prices on the site),
+  // show answers that match the real flow — find the product, call the pharmacy.
+  const faq = store.orderingEnabled ? dbFaq : t.pages.callFaq.map((f, i) => ({ id: `call-${i}`, question: f.q, answer: f.a }));
   const jsonLd = faq.length
     ? { "@context": "https://schema.org", "@type": "FAQPage", mainEntity: faq.map((f) => ({ "@type": "Question", name: f.question, acceptedAnswer: { "@type": "Answer", text: f.answer } })) }
     : null;

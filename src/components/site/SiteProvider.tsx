@@ -27,6 +27,8 @@ interface SiteContextValue {
   pharmacies: PickerPharmacy[];
   helpline: string;
   showDemo: boolean;
+  /** Online requests are possible only when SKU-level products with confirmed prices exist. */
+  orderingEnabled: boolean;
   openPharmacyPicker: () => void;
   selectPharmacy: (id: string) => Promise<void>;
   href: (path: string) => string;
@@ -47,6 +49,7 @@ export function SiteProvider(props: {
   pharmacies: PickerPharmacy[];
   helpline: string;
   showDemo: boolean;
+  orderingEnabled: boolean;
   children: ReactNode;
 }) {
   return (
@@ -56,7 +59,7 @@ export function SiteProvider(props: {
   );
 }
 
-function SiteInner({ locale, t, pharmacy, pharmacies, helpline, showDemo, children }: Parameters<typeof SiteProvider>[0]) {
+function SiteInner({ locale, t, pharmacy, pharmacies, helpline, showDemo, orderingEnabled, children }: Parameters<typeof SiteProvider>[0]) {
   const router = useRouter();
   const toast = useToast();
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -112,11 +115,12 @@ function SiteInner({ locale, t, pharmacy, pharmacies, helpline, showDemo, childr
       pharmacies,
       helpline,
       showDemo,
+      orderingEnabled,
       openPharmacyPicker: () => setPickerOpen(true),
       selectPharmacy,
       href: (path: string) => localizedPath(locale, path),
     }),
-    [locale, t, pharmacy, pharmacies, helpline, showDemo, selectPharmacy],
+    [locale, t, pharmacy, pharmacies, helpline, showDemo, orderingEnabled, selectPharmacy],
   );
 
   const q = query.trim().toLowerCase();
@@ -169,7 +173,7 @@ function SiteInner({ locale, t, pharmacy, pharmacies, helpline, showDemo, childr
                       {p.phones[0] ? formatPhone(p.phones[0]) : null}
                       {p.open !== null ? ` · ${p.open ? t.pharmacy.openNow : t.pharmacy.closedNow}` : ""}
                     </span>
-                    {!p.acceptsOrders ? <span className="mt-1 block text-sm text-warn-700">{t.pharmacy.notAcceptingOrders}</span> : null}
+                    {orderingEnabled && !p.acceptsOrders ? <span className="mt-1 block text-sm text-warn-700">{t.pharmacy.notAcceptingOrders}</span> : null}
                   </span>
                   <span className={cn("shrink-0 self-center text-sm font-semibold", selected ? "text-brand-700" : "text-brand-600")}>
                     {pendingId === p.id ? t.common.loading : selected ? t.pharmacy.selected : t.pharmacy.select}

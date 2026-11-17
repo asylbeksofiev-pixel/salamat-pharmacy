@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { prisma } from "@/server/db";
-import { catalogTokens, getCatalogItem, isCatalogId, listCatalogItems, suggestCatalogItems } from "@/server/catalog-items";
+import { catalogTokens, getCatalogItem, isCatalogId, listCatalogItems, listCatalogItemsByIds, suggestCatalogItems } from "@/server/catalog-items";
 
 async function tableCount() {
   const r = await prisma.$queryRaw<{ n: bigint }[]>`SELECT count(*) AS n FROM public.pharmacy_products`;
@@ -99,5 +99,14 @@ describe("catalogue from public.pharmacy_products", () => {
 
   it("tokenises queries without breaking articles or decimals", () => {
     expect(catalogTokens(" «Ёлка», 0,5 ABC-123/1 ")).toEqual(["елка", "0,5", "abc-123/1"]);
+  });
+
+  it("loads favourites by id in the given order, skipping unknown and invalid ids", async () => {
+    const page = await listCatalogItems({ pageSize: 3 });
+    const [a, b, c] = page.items.map((i) => i.id);
+    const res = await listCatalogItemsByIds([c, "999999999999", a, "abc", b, a]);
+    expect(res.map((i) => i.id)).toEqual([c, a, b]);
+    expect(await listCatalogItemsByIds([])).toEqual([]);
+    expect(await listCatalogItemsByIds(["0", "-5", "x"])).toEqual([]);
   });
 });

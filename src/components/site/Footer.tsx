@@ -6,7 +6,7 @@ import { formatPhone, telHref } from "@/lib/format";
 import type { CompanySetting } from "@/server/settings";
 import { Icon } from "../icons";
 
-export function Footer({ locale, t, helpline, company, categories }: { locale: Locale; t: Dictionary; helpline: string; company: CompanySetting; categories: { slug: string; name: string }[] }) {
+export function Footer({ locale, t, helpline, company, categories, orderingEnabled }: { locale: Locale; t: Dictionary; helpline: string; company: CompanySetting; categories: { slug: string; name: string }[]; orderingEnabled: boolean }) {
   const href = (p: string) => localizedPath(locale, p);
   const year = new Date().getFullYear();
   return (
@@ -28,6 +28,7 @@ export function Footer({ locale, t, helpline, company, categories }: { locale: L
         <nav aria-labelledby="f-catalog">
           <h2 id="f-catalog" className="mb-3 text-sm font-bold tracking-wider text-ink uppercase">{t.common.catalog}</h2>
           <ul className="flex flex-col gap-2 text-sm text-ink-soft">
+            <li><Link className="font-medium hover:text-brand-700 hover:underline" href={href("/catalog")}>{t.items.allProducts}</Link></li>
             {categories.slice(0, 9).map((c) => (
               <li key={c.slug}><Link className="hover:text-brand-700 hover:underline" href={href(`/catalog/${c.slug}`)}>{c.name}</Link></li>
             ))}
@@ -39,7 +40,7 @@ export function Footer({ locale, t, helpline, company, categories }: { locale: L
             <li><Link className="hover:text-brand-700 hover:underline" href={href("/pharmacies")}>{t.common.pharmacies}</Link></li>
             <li><Link className="hover:text-brand-700 hover:underline" href={href("/promotions")}>{t.common.promotions}</Link></li>
             <li><Link className="hover:text-brand-700 hover:underline" href={href("/help")}>{t.common.help}</Link></li>
-            <li><Link className="hover:text-brand-700 hover:underline" href={href("/cart")}>{t.common.cart}</Link></li>
+            {orderingEnabled ? <li><Link className="hover:text-brand-700 hover:underline" href={href("/cart")}>{t.common.cart}</Link></li> : null}
             <li><Link className="hover:text-brand-700 hover:underline" href={href("/favorites")}>{t.common.favorites}</Link></li>
           </ul>
         </nav>
