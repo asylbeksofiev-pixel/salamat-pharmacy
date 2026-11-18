@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getDictionary, isLocale, localizedPath } from "@/lib/i18n";
+import { dataLang, getDictionary, isLocale, localizedPath } from "@/lib/i18n";
 import { formatPhone, telHref } from "@/lib/format";
 import { getCatalogItem, isCatalogId } from "@/server/catalog-items";
 import { getSelectedPharmacy } from "@/server/pharmacies";
@@ -77,7 +77,7 @@ export default async function CatalogItemPage({ params }: PageProps<"/[locale]/c
               ) : null}
               <div className="min-w-0 flex-1">
                 {item.category ? <p className="text-sm font-semibold text-brand-700">{item.category}</p> : null}
-                <h1 id="item-title" className="text-[1.3rem] leading-tight font-bold tracking-tight break-words text-ink sm:text-[1.75rem] md:text-[1.9rem]">
+                <h1 id="item-title" lang={dataLang(locale, item.name)} className="text-[1.3rem] leading-tight font-bold tracking-tight break-words text-ink sm:text-[1.75rem] md:text-[1.9rem]">
                   {item.name}
                 </h1>
                 {item.article ? (

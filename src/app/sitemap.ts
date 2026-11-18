@@ -3,6 +3,7 @@ import { prisma } from "@/server/db";
 import { env } from "@/server/env";
 import { activePromotionWhere } from "@/server/catalog";
 import { localizedPath } from "@/lib/i18n/config";
+import { languageAlternates } from "@/server/seo";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 3600;
@@ -13,7 +14,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const entry = (path: string, lastModified?: Date): MetadataRoute.Sitemap[number] => ({
     url: `${base}${localizedPath("ru", path)}`,
     lastModified,
-    alternates: { languages: { "ru-KZ": `${base}${localizedPath("ru", path)}`, "kk-KZ": `${base}${localizedPath("kk", path)}` } },
+    alternates: { languages: languageAlternates(path, base) },
   });
   const [categories, products, pharmacies, promotions, pages] = await Promise.all([
     prisma.category.findMany({ where: { isActive: true }, select: { slug: true, updatedAt: true } }),

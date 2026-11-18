@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { VariantCard } from "@/server/catalog";
 import type { Dictionary, Locale } from "@/lib/i18n";
-import { fmt, localizedPath } from "@/lib/i18n/config";
+import { dataLang, fmt, localizedPath } from "@/lib/i18n/config";
 import { formatKzt } from "@/lib/format";
 import { AvailabilityBadge, PriceBlock, RxBadge } from "./Offer";
 import { FavoriteButton, OfferActions } from "./OfferActions";
@@ -53,7 +53,7 @@ export function ProductCard({ item, t, locale, pharmacyPhone }: { item: VariantC
             <PromoBadges promos={item.promos} t={t} locale={locale} />
           </div>
         ) : null}
-        <h3 className="line-clamp-3 text-[0.9rem] leading-snug font-semibold break-words text-ink sm:text-[0.95rem]" title={item.fullName}>
+        <h3 className="line-clamp-3 text-[0.9rem] leading-snug font-semibold break-words text-ink sm:text-[0.95rem]" title={item.fullName} lang={dataLang(locale, item.fullName)}>
           <Link href={href} className="after:absolute after:inset-0 after:z-[1] after:content-[''] hover:text-brand-700 focus-visible:outline-none">
             {item.fullName}
           </Link>

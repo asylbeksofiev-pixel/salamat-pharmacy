@@ -3,7 +3,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useRef, useState, type FormEvent } from "react";
 import { cartStore } from "@/lib/client/stores";
-import { fmt } from "@/lib/i18n/config";
+import { dataLang, fmt } from "@/lib/i18n/config";
 import type { Quote } from "@/server/orders/quote";
 import { useSite } from "../site/SiteProvider";
 import { PharmacyChip } from "../site/HeaderParts";
@@ -256,7 +256,7 @@ export function CheckoutView() {
               {(quote?.lines ?? []).map((l) => (
                 <li key={l.variantId} className="flex items-start justify-between gap-3 py-3">
                   <span className="min-w-0">
-                    <span className="block text-[0.95rem] leading-snug font-medium break-words">{l.fullName}</span>
+                    <span className="block text-[0.95rem] leading-snug font-medium break-words" lang={dataLang(locale, l.fullName)}>{l.fullName}</span>
                     {l.article ? <span className="block text-xs text-muted">{t.items.article}: <span className="font-mono break-all">{l.article}</span></span> : null}
                     <span className="text-sm text-muted">{l.quantity} {t.common.pieces}</span>
                     {l.blocking ? <span className="block text-sm text-accent-600">{t.cart.becameUnavailable}</span> : null}

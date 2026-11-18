@@ -2,7 +2,7 @@ import "server-only";
 import { cache } from "react";
 import { cookies } from "next/headers";
 import { prisma } from "./db";
-import { pickLocalized, type Locale } from "@/lib/i18n";
+import { cityName, pickLocalized, type Locale } from "@/lib/i18n";
 import { openStatus, parseOpeningHours, type OpeningHours, type OpenStatus } from "@/lib/hours";
 
 export const PHARMACY_COOKIE = "salamat_pharmacy";
@@ -46,7 +46,7 @@ function toView(p: Row, locale: Locale, now: Date): PharmacyView {
     name: p.name,
     address: pickLocalized(locale, p.addressRu, p.addressKk),
     addressRu: p.addressRu,
-    city: pickLocalized(locale, p.city.nameRu, p.city.nameKk),
+    city: cityName(locale, p.city.slug, p.city.nameRu, p.city.nameKk),
     cityRu: p.city.nameRu,
     phones: p.phones,
     latitude: p.latitude ? Number(p.latitude) : null,

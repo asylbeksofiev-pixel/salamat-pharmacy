@@ -4,7 +4,7 @@ import { env } from "./env";
 import { getSettings } from "./settings";
 import { activePromotionWhere, getCategoryTree, categoryPath, listVariants, promosForVariants, type CategoryNode, type PromoBadge, type VariantCard } from "./catalog";
 import { computeOffer, isConfirmedAvailable, type Offer, type PrescriptionValue } from "@/lib/offer";
-import { pickLocalized, type Locale } from "@/lib/i18n";
+import { pickLocalized, pickLocalizedOptional, type Locale } from "@/lib/i18n";
 
 export interface VariantDetail {
   id: string;
@@ -128,7 +128,7 @@ export async function getProduct(slug: string, locale: Locale, pharmacyId: strin
     id: product.id,
     slug: product.slug,
     name: pickLocalized(locale, product.name, product.nameKk),
-    description: locale === "kk" ? (product.descriptionKk ?? product.descriptionRu) : product.descriptionRu,
+    description: pickLocalizedOptional(locale, product.descriptionRu, product.descriptionKk),
     brandName: product.brand?.name ?? null,
     manufacturer: product.manufacturer,
     category,

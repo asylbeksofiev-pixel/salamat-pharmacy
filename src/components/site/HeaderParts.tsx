@@ -1,14 +1,26 @@
 "use client";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useRef, useState, useTransition, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent } from "react";
 import { Icon, isIconName } from "../icons";
 import { cn } from "../ui/cn";
 import { Drawer } from "../ui/Dialog";
 import { useSite } from "./SiteProvider";
 import { useCartCount, useFavorites, useHydrated } from "@/lib/client/stores";
-import { fmt, localeLabels, localeNames, localizedPath, locales, splitLocale } from "@/lib/i18n/config";
+import { fmt, LOCALE_COOKIE, localeLabels, localeNames, localizedPath, locales, splitLocale, type Locale } from "@/lib/i18n/config";
 import { formatPhone, telHref } from "@/lib/format";
+import { CART_BUMP_EVENT } from "@/lib/client/fly-to-cart";
+
+/** Counts "item landed in the cart" events so the cart icon can replay its bump animation each time. */
+function useCartBump(): number {
+  const [n, setN] = useState(0);
+  useEffect(() => {
+    const on = () => setN((x) => x + 1);
+    window.addEventListener(CART_BUMP_EVENT, on);
+    return () => window.removeEventListener(CART_BUMP_EVENT, on);
+  }, []);
+  return n;
+}
 
 /**
  * Props for a link that behaves as a button once JavaScript has loaded.
@@ -38,32 +50,61 @@ export interface MenuCategory {
   children: { slug: string; name: string }[];
 }
 
+/**
+ * RU / KZ / EN. The white pill slides to the chosen language at once (optimistic), then the page is fetched with
+ * a client navigation, so the current page stays on screen until the translated one is ready (no blank flash).
+ * The current path, search query, filters and hash are kept. Without JavaScript the plain link
+ * (?lang=xx → proxy sets the cookie and redirects) still works.
+ */
 export function LanguageSwitcher({ className }: { className?: string }) {
   const { locale, t } = useSite();
+  const router = useRouter();
   const pathname = usePathname() || "/";
   const { path } = splitLocale(pathname);
+  const [pending, startTransition] = useTransition();
+  const [chosen, setChosen] = useState<Locale | null>(null);
+  // Once the new locale has arrived (or the navigation was abandoned), the context is the source of truth again.
+  const shown = pending && chosen ? chosen : locale;
+  const index = locales.indexOf(shown);
   return (
-    <div className={cn("flex items-center gap-0.5 rounded-full bg-surface p-0.5", className)} role="group" aria-label={t.common.language}>
+    <div
+      className={cn("relative grid grid-cols-3 rounded-full bg-surface p-0.5", className)}
+      style={{ ["--lang-i" as string]: index }}
+      role="group"
+      aria-label={t.common.language}
+      aria-busy={pending || undefined}
+    >
+      <span aria-hidden="true" className="sal-lang-pill pointer-events-none absolute inset-y-0.5 left-0.5 w-[calc((100%-0.25rem)/3)] rounded-full bg-white shadow-sm" />
       {locales.map((l) => {
-        const target = `${localizedPath(l, path)}?lang=${l}`;
         const current = l === locale;
         return (
           <a
             key={l}
-            href={target}
+            href={`${localizedPath(l, path)}?lang=${l}`}
             onClick={(e) => {
-              // Keep filters and search query when switching language.
+              if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+              e.preventDefault();
+              if (l === locale && !pending) return;
               const params = new URLSearchParams(window.location.search);
-              params.set("lang", l);
-              e.currentTarget.href = `${localizedPath(l, path)}?${params.toString()}`;
+              params.delete("lang");
+              const query = params.toString();
+              const target = `${localizedPath(l, path)}${query ? `?${query}` : ""}${window.location.hash}`;
+              try {
+                document.cookie = `${LOCALE_COOKIE}=${l}; path=/; max-age=${60 * 60 * 24 * 365}; samesite=lax`;
+              } catch {
+                /* cookies blocked: the URL still carries the language */
+              }
+              setChosen(l);
+              startTransition(() => router.push(target, { scroll: false }));
             }}
             hrefLang={l}
             lang={l}
             aria-current={current ? "true" : undefined}
             title={localeNames[l]}
             className={cn(
-              "rounded-full px-2.5 py-1 text-xs font-bold tracking-wide transition-colors",
-              current ? "bg-white text-brand-700 shadow-sm" : "text-muted hover:text-ink",
+              "relative z-[1] grid min-h-8 min-w-10 place-items-center rounded-full px-2.5 text-xs font-bold tracking-wide transition-colors duration-200",
+              "focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-brand-600",
+              l === shown ? "text-brand-700" : "text-muted hover:text-ink",
             )}
           >
             <span className="sr-only">{localeNames[l]}</span>
@@ -100,6 +141,7 @@ export function PharmacyChip({ compact = false }: { compact?: boolean }) {
 export function HeaderCounters() {
   const { t, href, orderingEnabled } = useSite();
   const hydrated = useHydrated();
+  const bump = useCartBump();
   const count = useCartCount();
   const favs = useFavorites().length;
   const c = hydrated ? count : 0;
@@ -116,9 +158,11 @@ export function HeaderCounters() {
           className="relative flex h-11 items-center gap-3.5 rounded-[var(--radius-md)] px-2.5 text-ink-soft transition-[background-color,color,scale] duration-200 hover:bg-surface hover:text-ink motion-safe:active:scale-95"
           aria-label={`${t.common.cart}${c ? `. ${fmt(t.header.cartCount, { count: c })}` : ""}`}
         >
-          <span className="relative">
-            <Icon name="cart" />
-            {c ? <span key={c} className="sal-favorite-badge absolute -top-2 -right-2.5 grid min-w-5 place-items-center rounded-full bg-accent-500 px-1 text-[0.7rem] leading-5 font-bold text-white" aria-hidden="true">{c}</span> : null}
+          <span className="relative" data-cart-target>
+            <span key={bump} className={cn("grid place-items-center", bump > 0 && "sal-cart-bump")}>
+              <Icon name="cart" />
+            </span>
+            {c ? <span key={c} className="sal-badge-bump absolute -top-2 -right-2.5 grid min-w-5 place-items-center rounded-full bg-accent-500 px-1 text-[0.7rem] leading-5 font-bold text-white" aria-hidden="true">{c}</span> : null}
           </span>
           <span className="hidden text-sm font-semibold lg:inline">{t.common.cart}</span>
         </Link>
@@ -279,6 +323,7 @@ export function MobileBottomNav() {
   const hydrated = useHydrated();
   const count = useCartCount();
   const favs = useFavorites().length;
+  const bump = useCartBump();
   const { path } = splitLocale(pathname);
   const items = [
     { href: "/", label: t.common.home, icon: "home" as const, match: (p: string) => p === "/" },
@@ -320,16 +365,17 @@ export function MobileBottomNav() {
               >
                 <span
                   key={on ? `on-${nav.pulse}` : "off"}
+                  data-cart-target={it.href === "/cart" || undefined}
                   className={cn(
                     "relative grid h-7 w-12 place-items-center rounded-full transition-[background-color,transform] duration-200 group-active:scale-90",
                     on && "bg-brand-50",
                     on && nav.pulse > 0 && "sal-nav-pill",
                   )}
                 >
-                  <span className={cn("grid place-items-center", on && nav.pulse > 0 && "sal-nav-bounce")}>
+                  <span key={it.href === "/cart" ? `b-${bump}` : undefined} className={cn("grid place-items-center", on && nav.pulse > 0 && "sal-nav-bounce", it.href === "/cart" && bump > 0 && "sal-cart-bump")}>
                     <Icon name={it.icon} size={22} />
                   </span>
-                  {it.badge ? <span className="absolute -top-1 right-1 grid min-w-4.5 place-items-center rounded-full bg-accent-500 px-1 text-[0.62rem] leading-[1.125rem] font-bold text-white" aria-hidden="true">{it.badge}</span> : null}
+                  {it.badge ? <span key={it.badge} className="sal-badge-bump absolute -top-1 right-1 grid min-w-4.5 place-items-center rounded-full bg-accent-500 px-1 text-[0.62rem] leading-[1.125rem] font-bold text-white" aria-hidden="true">{it.badge}</span> : null}
                 </span>
                 <span className={cn("max-w-full truncate px-0.5", on && "font-semibold")}>{it.label}</span>
               </Link>

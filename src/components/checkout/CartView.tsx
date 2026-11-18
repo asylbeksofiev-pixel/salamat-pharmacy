@@ -1,9 +1,9 @@
 "use client";
 import Link from "next/link";
 import { cartStore } from "@/lib/client/stores";
-import { fmt } from "@/lib/i18n/config";
+import { dataLang, fmt } from "@/lib/i18n/config";
 import { formatKzt } from "@/lib/format";
-import type { Dictionary } from "@/lib/i18n";
+import type { Dictionary, Locale } from "@/lib/i18n";
 import { useSite } from "../site/SiteProvider";
 import { PharmacyChip } from "../site/HeaderParts";
 import { Button, ButtonLink } from "../ui/Button";
@@ -16,7 +16,7 @@ import { useQuote, type ChangeNote } from "./useQuote";
 import type { Quote, QuoteLine } from "@/server/orders/quote";
 import { useToast } from "../ui/Toast";
 
-export function noteText(n: ChangeNote, t: Dictionary, locale: "ru" | "kk"): string {
+export function noteText(n: ChangeNote, t: Dictionary, locale: Locale): string {
   if (n.kind === "removed") return t.cart.removedFromCatalog;
   if (n.kind === "rx") return t.cart.rxBlockedLine;
   if (n.kind === "unavailable") return t.cart.becameUnavailable;
@@ -24,7 +24,7 @@ export function noteText(n: ChangeNote, t: Dictionary, locale: "ru" | "kk"): str
   return fmt(t.cart.priceChanged, { old: show(n.oldPrice), new: show(n.newPrice) });
 }
 
-export function LinePrice({ line, t, locale }: { line: QuoteLine; t: Dictionary; locale: "ru" | "kk" }) {
+export function LinePrice({ line, t, locale }: { line: QuoteLine; t: Dictionary; locale: Locale }) {
   if (line.unitPriceKzt !== null) {
     return (
       <div className="text-right">
@@ -44,7 +44,7 @@ export function lineHref(href: (p: string) => string, variantId: string, q: Quot
 }
 
 /** Totals: a sum only from confirmed prices, and a plain explanation when it cannot be calculated yet. */
-export function QuoteTotals({ quote, t, locale }: { quote: Quote; t: Dictionary; locale: "ru" | "kk" }) {
+export function QuoteTotals({ quote, t, locale }: { quote: Quote; t: Dictionary; locale: Locale }) {
   const hasSum = quote.totalKzt > 0;
   return (
     <div>
@@ -140,7 +140,7 @@ export function CartView() {
                 <li key={l.variantId} className="grid grid-cols-[4.5rem_minmax(0,1fr)] gap-x-3 gap-y-3 p-4 sm:grid-cols-[6rem_minmax(0,1fr)_auto] sm:gap-x-5 sm:p-5">
                   <div className="row-span-2 sm:row-span-1">{link ? <Link href={link} tabIndex={-1} aria-hidden="true">{thumb}</Link> : thumb}</div>
                   <div className="min-w-0">
-                    <h2 className="text-[0.98rem] leading-snug font-semibold break-words text-ink">{link ? <Link href={link} className="hover:text-brand-700">{name}</Link> : name}</h2>
+                    <h2 className="text-[0.98rem] leading-snug font-semibold break-words text-ink" lang={dataLang(locale, name)}>{link ? <Link href={link} className="hover:text-brand-700">{name}</Link> : name}</h2>
                     {q?.article ? (
                       <p className="mt-0.5 text-xs text-muted">
                         {t.items.article}: <span className="font-mono break-all text-ink-soft">{q.article}</span>
