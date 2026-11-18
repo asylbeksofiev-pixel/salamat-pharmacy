@@ -95,4 +95,38 @@ describe("pickup requests", () => {
     expect(results.filter((r) => r.ok)).toHaveLength(5);
     expect(results[5]).toMatchObject({ ok: false, status: 429 });
   });
+  it("catalogue products go into a request 'to be confirmed': no price, no total, article kept", async () => {
+    const sal1 = await prisma.pharmacy.findUniqueOrThrow({ where: { code: "SAL-01" } });
+    const rows = await prisma.$queryRaw<{ id: string; article: string; name: string }[]>`SELECT id::text AS id, article, name FROM public.pharmacy_products WHERE article = 'ASP-100' LIMIT 1`;
+    const item = rows[0];
+    const quote = await buildQuote({ pharmacyId: sal1.id, items: [{ variantId: item.id, quantity: 3, seenPriceKzt: null }], locale: "ru" });
+    expect(quote.lines[0]).toMatchObject({ kind: "catalog", fullName: item.name, article: "ASP-100", unitPriceKzt: null, blocking: false });
+    expect(quote.lines[0].issues).toContain("needs_confirmation");
+    expect(quote.hasUnpriced).toBe(true);
+    expect(quote.hasBlocking).toBe(false);
+    expect(quote.totalKzt).toBe(0);
+
+    const res = await createOrder(order({ pharmacyId: sal1.id, items: [{ variantId: item.id, quantity: 3, seenPriceKzt: null }] }), "client-cat");
+    expect(res.ok).toBe(true);
+    const saved = await prisma.order.findFirstOrThrow({ include: { items: true } });
+    expect(saved.status).toBe("NEW");
+    expect(saved.totalKzt).toBeNull();
+    expect(saved.hasUnpricedItems).toBe(true);
+    expect(saved.items[0]).toMatchObject({ variantId: null, nameSnapshot: item.name, skuSnapshot: "ASP-100", quantity: 3, unitPriceKzt: null, lineTotalKzt: null });
+  });
+
+  it("mixes priced SKUs and catalogue products; unknown catalogue ids block the request", async () => {
+    const { sal1, v200 } = await setup();
+    const rows = await prisma.$queryRaw<{ id: string }[]>`SELECT id::text AS id FROM public.pharmacy_products ORDER BY id LIMIT 1`;
+    const mixed = await buildQuote({ pharmacyId: sal1.id, items: [{ variantId: v200.id, quantity: 1, seenPriceKzt: 300 }, { variantId: rows[0].id, quantity: 1 }], locale: "ru" });
+    expect(mixed.totalKzt).toBe(300);
+    expect(mixed.hasUnpriced).toBe(true);
+    expect(mixed.hasBlocking).toBe(false);
+    const missing = await buildQuote({ pharmacyId: sal1.id, items: [{ variantId: "999999999999", quantity: 1 }], locale: "ru" });
+    expect(missing.lines[0].issues).toContain("removed");
+    expect(missing.hasBlocking).toBe(true);
+    const res = await createOrder(order({ pharmacyId: sal1.id, items: [{ variantId: "999999999999", quantity: 1 }] }), "client-missing");
+    expect(res.ok).toBe(false);
+    expect(await prisma.order.count()).toBe(0);
+  });
 });

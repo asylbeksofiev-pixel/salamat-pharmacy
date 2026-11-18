@@ -213,14 +213,44 @@ dialog.sal-drawer-bottom[data-closing] {
   animation: 220ms var(--ease-out-soft) backwards sal-badge-in;
 }
 
-/* Product lists: cards fade in once with a tiny stagger for the first row(s); later cards appear together. */
-.anim-list > * {
-  animation: 240ms var(--ease-out-soft) both sal-page-in;
+/* Product lists: only the first two rows fade in once, with a tiny stagger; the rest of a long list is static.
+   "backwards" fill: after the entrance the card is in its normal state (nothing stays transparent). */
+@media (prefers-reduced-motion: no-preference) {
+  .anim-list > :nth-child(-n + 8) {
+    animation: 280ms var(--ease-out-soft) var(--list-delay, 0ms) backwards sal-page-in;
+  }
+  .anim-list > :nth-child(2) { --list-delay: 35ms; }
+  .anim-list > :nth-child(3) { --list-delay: 70ms; }
+  .anim-list > :nth-child(4) { --list-delay: 105ms; }
+  .anim-list > :nth-child(n + 5) { --list-delay: 130ms; }
 }
-.anim-list > :nth-child(2) { animation-delay: 30ms; }
-.anim-list > :nth-child(3) { animation-delay: 60ms; }
-.anim-list > :nth-child(4) { animation-delay: 90ms; }
-.anim-list > :nth-child(n + 5) { animation-delay: 110ms; }
+
+/* Product cards: calm hover (border, shadow, 2px lift), a visible focus ring when the title link is focused,
+   and a short "pop" on the cart button once a product is added. */
+.sal-card {
+  transition:
+    border-color 200ms var(--ease-out-soft),
+    box-shadow 200ms var(--ease-out-soft),
+    translate 220ms var(--ease-out-soft);
+}
+.sal-card:has(h3 a:focus-visible) {
+  outline: 3px solid var(--color-brand-600);
+  outline-offset: 2px;
+}
+@media (hover: hover) and (pointer: fine) {
+  .sal-card:hover {
+    border-color: var(--color-brand-200);
+    box-shadow: 0 2px 4px rgb(20 35 26 / 0.04), 0 12px 32px rgb(20 35 26 / 0.08);
+  }
+}
+@media (prefers-reduced-motion: no-preference) and (hover: hover) and (pointer: fine) {
+  .sal-card:hover {
+    translate: 0 -2px;
+  }
+}
+.sal-cart-pop {
+  animation: sal-heart-pop 380ms var(--ease-out-soft) both;
+}
 
 /* Tactile press feedback for buttons and button-like links. */
 .press {
@@ -262,17 +292,20 @@ dialog.sal-drawer-bottom[data-closing] {
 
 @media (prefers-reduced-motion: no-preference) {
   .sal-search-submit:active { scale: 0.98; }
-  .sal-hero-copy > :nth-child(-n + 5),
+  /* Hero: badge, title, text and buttons rise in one after another, then the stats; the visual fades in. */
+  .sal-hero-copy > :nth-child(-n + 4),
   .sal-hero-stats > * {
-    animation: 440ms var(--ease-out-soft) var(--hero-delay, 0ms) backwards sal-hero-in;
+    animation: 520ms var(--ease-out-soft) var(--hero-delay, 0ms) backwards sal-hero-in;
   }
-  .sal-hero-copy > :nth-child(2) { --hero-delay: 35ms; }
-  .sal-hero-copy > :nth-child(3) { --hero-delay: 70ms; }
-  .sal-hero-copy > :nth-child(4) { --hero-delay: 120ms; }
-  .sal-hero-copy > :nth-child(5) { --hero-delay: 165ms; }
-  .sal-hero-stats > :nth-child(1) { --hero-delay: 205ms; }
-  .sal-hero-stats > :nth-child(2) { --hero-delay: 245ms; }
-  .sal-hero-stats > :nth-child(3) { --hero-delay: 285ms; }
+  .sal-hero-copy > :nth-child(2) { --hero-delay: 50ms; }
+  .sal-hero-copy > :nth-child(3) { --hero-delay: 110ms; }
+  .sal-hero-copy > :nth-child(4) { --hero-delay: 170ms; }
+  .sal-hero-stats > :nth-child(1) { --hero-delay: 230ms; }
+  .sal-hero-stats > :nth-child(2) { --hero-delay: 270ms; }
+  .sal-hero-stats > :nth-child(3) { --hero-delay: 310ms; }
+  .sal-hero-visual {
+    animation: 700ms var(--ease-out-soft) 120ms backwards sal-hero-visual-in;
+  }
 
   .sal-hero-ring {
     animation: 18s ease-in-out sal-ring-drift;
@@ -550,8 +583,14 @@ details[open]::details-content {
 }
 @keyframes sal-hero-in {
   from {
-    opacity: 0.78;
-    transform: translateY(8px);
+    opacity: 0.35;
+    transform: translateY(12px);
+  }
+}
+@keyframes sal-hero-visual-in {
+  from {
+    opacity: 0.4;
+    transform: translateY(12px) scale(0.97);
   }
 }
 @keyframes sal-ring-drift {

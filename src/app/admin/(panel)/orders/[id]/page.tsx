@@ -35,11 +35,16 @@ export default async function OrderPage({ params }: PageProps<"/admin/orders/[id
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_24rem]">
         <div className="flex flex-col gap-5">
           {order.status === "NEW" ? <Notice tone="warning">Новая заявка: проверьте наличие и цену в аптеке и позвоните покупателю. До подтверждения покупатель видит «Заявка отправлена, оператор подтвердит детали».</Notice> : null}
+          {order.hasUnpricedItems && order.totalKzt === null ? <Notice tone="info">Заявка на уточнение: у товаров нет подтверждённых цен на сайте. Назовите покупателю цену и наличие по телефону.</Notice> : null}
           <Card title="Состав">
             <Table head={["Товар (снимок на момент заявки)", "Кол-во", "Цена", "Сумма", "Наличие при заявке", "Рецепт"]}>
               {order.items.map((i) => (
                 <tr key={i.id}>
-                  <Td>{i.variant ? <AdminLink href={`/product/${i.variant.product.slug}?sku=${i.variant.slug}`}>{i.nameSnapshot}</AdminLink> : i.nameSnapshot}</Td>
+                  <Td>
+                    {i.variant ? <AdminLink href={`/product/${i.variant.product.slug}?sku=${i.variant.slug}`}>{i.nameSnapshot}</AdminLink> : i.nameSnapshot}
+                    {/* Catalogue products (no SKU record) keep the SALAMAT article in skuSnapshot. */}
+                    {!i.variantId && i.skuSnapshot ? <span className="block text-xs text-muted">{i.skuSnapshot.startsWith("#") ? "ID в каталоге" : "Артикул"}: <span className="font-mono">{i.skuSnapshot.replace(/^#/, "")}</span></span> : null}
+                  </Td>
                   <Td>{i.quantity}</Td>
                   <Td className="whitespace-nowrap">{i.unitPriceKzt !== null ? formatKzt(i.unitPriceKzt) : <span className="text-warn-700">уточнить</span>}</Td>
                   <Td className="whitespace-nowrap">{i.lineTotalKzt !== null ? formatKzt(i.lineTotalKzt) : "—"}</Td>

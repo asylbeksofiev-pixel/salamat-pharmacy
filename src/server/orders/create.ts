@@ -82,9 +82,10 @@ export async function createOrder(raw: unknown, clientHash: string): Promise<Cre
             clientIpHash: clientHash,
             items: {
               create: quote.lines.map((l) => ({
-                variantId: l.variantId,
+                // Catalogue products are not ProductVariant rows: keep the name and SALAMAT article as the snapshot.
+                variantId: l.kind === "variant" ? l.variantId : null,
                 nameSnapshot: l.fullName,
-                skuSnapshot: l.variantSlug,
+                skuSnapshot: l.kind === "variant" ? l.variantSlug : (l.article ?? `#${l.variantId}`),
                 quantity: l.quantity,
                 unitPriceKzt: l.unitPriceKzt,
                 lineTotalKzt: l.lineTotalKzt,

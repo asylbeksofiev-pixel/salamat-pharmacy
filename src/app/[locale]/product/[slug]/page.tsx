@@ -95,7 +95,7 @@ export default async function ProductPage({ params, searchParams }: PageProps<"/
       />
       <div className="mt-6 grid gap-6 md:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:gap-8">
         <div className="relative mx-auto w-full max-w-[18rem] self-start md:sticky md:top-36 md:max-w-none">
-          <ProductImage src={v.imageUrl} alt={v.fullName} noImageLabel={t.product.noImage} className="rounded-[var(--radius-2xl)] border border-line" priority sizes="(max-width: 1024px) 100vw, 40vw" />
+          <ProductImage src={v.imageUrl} alt={v.fullName} noImageLabel={t.product.noImage} radius="rounded-[var(--radius-2xl)]" className="border border-line" priority sizes="(max-width: 1024px) 100vw, 40vw" />
           <div className="absolute top-3 left-3">
             <RxBadge status={v.prescriptionStatus} t={t} />
           </div>

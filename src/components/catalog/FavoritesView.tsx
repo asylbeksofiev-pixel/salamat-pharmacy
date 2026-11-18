@@ -1,17 +1,14 @@
 "use client";
 // Favourites are stored in the browser; cards are rendered from /api/favorites with current offers.
-import Link from "next/link";
 import { useEffect, useState } from "react";
 import type { VariantCard } from "@/server/catalog";
 import type { CatalogItem } from "@/server/catalog-items";
-import { CatalogItemCard } from "./CatalogItems";
+import { CatalogItemGrid, PRODUCT_GRID } from "./CatalogItems";
+import { ProductCard } from "./ProductCard";
 import { useFavorites, useHydrated } from "@/lib/client/stores";
 import { useSite } from "../site/SiteProvider";
 import { EmptyState, ErrorState, Skeleton } from "../ui/Feedback";
 import { ButtonLink } from "../ui/Button";
-import { AvailabilityBadge, PriceBlock } from "./Offer";
-import { FavoriteButton, OfferActions } from "./OfferActions";
-import { ProductImage } from "./ProductImage";
 
 export function FavoritesView() {
   const { t, locale, href, pharmacy } = useSite();
@@ -42,53 +39,44 @@ export function FavoritesView() {
     return () => ctrl.abort();
   }, [key, hydrated, locale, pharmacy?.id]);
 
+  const count = hydrated ? ids.length : 0;
   return (
-    <div className="container-page py-6 md:py-8">
-      <h1 className="text-[1.75rem] font-bold tracking-tight sm:text-[2.1rem]">{t.favorites.title}</h1>
+    <div className="container-page py-6 md:py-10">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <h1 className="text-[1.75rem] leading-tight font-bold tracking-tight text-ink sm:text-[2.25rem]">
+          {t.favorites.title}
+          {count ? <span className="ml-2 align-middle text-lg font-semibold text-muted tabular-nums">{count}</span> : null}
+        </h1>
+        {count ? (
+          <ButtonLink href={href("/catalog")} variant="ghost" size="sm" iconRight="chevronRight">
+            {t.items.allProducts}
+          </ButtonLink>
+        ) : null}
+      </div>
       <div className="mt-6">
         {hydrated && !key ? (
           <EmptyState icon="heart" title={t.favorites.empty} text={t.favorites.emptyText} action={<ButtonLink href={href("/catalog")}>{t.cart.toCatalog}</ButtonLink>} />
         ) : failed ? (
           <ErrorState title={t.items.loadError} text={t.items.loadErrorText} />
         ) : !hydrated || items === null || catalog === null ? (
-          <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-            {[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-80" />)}
+          <div className={PRODUCT_GRID} aria-busy="true">
+            {[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-80 rounded-[var(--radius-xl)]" />)}
           </div>
         ) : items.length === 0 && catalog.length === 0 ? (
           <EmptyState icon="heart" title={t.favorites.empty} text={t.favorites.emptyText} action={<ButtonLink href={href("/catalog")}>{t.cart.toCatalog}</ButtonLink>} />
         ) : (
-          <>
-          {catalog.length ? (
-            <ul className="anim-list grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4">
-              {catalog.map((c) => (
-                <li key={c.id} className="min-w-0">
-                  <CatalogItemCard item={c} t={t} locale={locale} />
-                </li>
-              ))}
-            </ul>
-          ) : null}
-          {items.length ? (
-          <ul className="mt-4 grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 xl:grid-cols-4">
-            {items.map((it) => {
-              const link = `${href(`/product/${it.productSlug}`)}?sku=${encodeURIComponent(it.slug)}`;
-              return (
-                <li key={it.id}>
-                  <article className="relative flex h-full flex-col gap-3 rounded-[var(--radius-xl)] border border-line bg-white p-3 sm:p-4">
-                    <div className="relative">
-                      <Link href={link} tabIndex={-1} aria-hidden="true"><ProductImage src={it.imageUrl} alt={it.fullName} noImageLabel={t.product.noImage} /></Link>
-                      <FavoriteButton variantId={it.id} className="absolute top-1.5 right-1.5 shadow-sm" />
-                    </div>
-                    <h2 className="flex-1 text-[0.95rem] leading-snug font-semibold"><Link href={link} className="hover:text-brand-700">{it.fullName}</Link></h2>
-                    <PriceBlock offer={it.offer} minPriceKzt={it.minPriceKzt} priceCount={it.priceCount} t={t} locale={locale} />
-                    <AvailabilityBadge offer={it.offer} t={t} locale={locale} />
-                    <OfferActions variantId={it.id} fullName={it.fullName} offer={it.offer} pharmacyPhone={pharmacy?.phones[0]} />
-                  </article>
-                </li>
-              );
-            })}
-          </ul>
-          ) : null}
-          </>
+          <div className="flex flex-col gap-4">
+            {catalog.length ? <CatalogItemGrid items={catalog} t={t} locale={locale} /> : null}
+            {items.length ? (
+              <ul className={`anim-list ${PRODUCT_GRID}`}>
+                {items.map((it) => (
+                  <li key={it.id} className="min-w-0">
+                    <ProductCard item={it} t={t} locale={locale} pharmacyPhone={pharmacy?.phones[0]} />
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
         )}
       </div>
     </div>

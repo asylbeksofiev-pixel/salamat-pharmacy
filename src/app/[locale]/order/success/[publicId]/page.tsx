@@ -55,14 +55,21 @@ export default async function OrderSuccessPage({ params }: PageProps<"/[locale]/
           <ul className="divide-y divide-line">
             {order.items.map((i) => (
               <li key={i.id} className="flex justify-between gap-4 py-2.5 text-[0.95rem]">
-                <span>{i.nameSnapshot} × {i.quantity}</span>
-                <span className="shrink-0 font-semibold">{i.lineTotalKzt !== null ? formatKzt(i.lineTotalKzt, locale) : <span className="font-normal text-muted">{t.offer.priceUnknown}</span>}</span>
+                <span className="min-w-0">
+                  <span className="break-words">{i.nameSnapshot} × {i.quantity}</span>
+                  {!i.variantId && i.skuSnapshot && !i.skuSnapshot.startsWith("#") ? (
+                    <span className="block text-xs text-muted">
+                      {t.items.article}: <span className="font-mono">{i.skuSnapshot}</span>
+                    </span>
+                  ) : null}
+                </span>
+                <span className="shrink-0 text-right font-semibold">{i.lineTotalKzt !== null ? formatKzt(i.lineTotalKzt, locale) : <span className="font-normal text-muted">{t.request.priceByPharmacy}</span>}</span>
               </li>
             ))}
           </ul>
           <div className="mt-3 flex justify-between gap-4 border-t border-line pt-3">
             <span className="text-ink-soft">{order.hasUnpricedItems ? t.order.totalPending : t.order.totalConfirmed}</span>
-            <span className="text-xl font-bold">{order.totalKzt ? formatKzt(order.totalKzt, locale) : "—"}</span>
+            {order.totalKzt ? <span className="text-xl font-bold">{formatKzt(order.totalKzt, locale)}</span> : null}
           </div>
         </div>
       ) : null}

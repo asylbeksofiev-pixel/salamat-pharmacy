@@ -1,6 +1,9 @@
 import "server-only";
 // What the storefront can honestly offer right now, derived from the data (not from flags):
-// * ordering — online requests need SKU-level products with a confirmed price in at least one pharmacy;
+// * ordering — the cart and pickup requests work when at least one pharmacy accepts requests and there is
+//   something to request: SKU-level products with confirmed prices, or catalogue products (public.pharmacy_products)
+//   sent "to be confirmed" — the pharmacy confirms price and stock by phone (request mode, no online payment);
+// * pricesConfirmed — at least one SKU has a confirmed price (texts that talk about prices on the site);
 // * categories — category navigation is shown only for sections that actually contain products;
 // * catalogTotal — size of the product list from public.pharmacy_products.
 import { cache } from "react";
@@ -9,6 +12,7 @@ import { env } from "./env";
 
 export interface StorefrontState {
   orderingEnabled: boolean;
+  pricesConfirmed: boolean;
   categoryIdsWithProducts: Set<string>;
   catalogTotal: number | null;
 }
@@ -20,8 +24,9 @@ const visibleVariant = () => ({
 });
 
 export const getStorefrontState = cache(async (): Promise<StorefrontState> => {
-  const [priced, products, categories, total] = await Promise.all([
+  const [priced, accepting, products, categories, total] = await Promise.all([
     prisma.price.findFirst({ where: { variant: visibleVariant(), pharmacy: { isActive: true } }, select: { id: true } }),
+    prisma.pharmacy.findFirst({ where: { isActive: true, acceptsOrders: true }, select: { id: true } }),
     prisma.product.findMany({
       where: { publicationStatus: "PUBLISHED", categoryId: { not: null }, variants: { some: visibleVariant() } },
       select: { categoryId: true },
@@ -43,5 +48,6 @@ export const getStorefrontState = cache(async (): Promise<StorefrontState> => {
       cur = parent.get(cur);
     }
   }
-  return { orderingEnabled: !!priced, categoryIdsWithProducts: withProducts, catalogTotal: total };
+  const catalogRequests = !!accepting && (total ?? 0) > 0;
+  return { orderingEnabled: !!priced || catalogRequests, pricesConfirmed: !!priced, categoryIdsWithProducts: withProducts, catalogTotal: total };
 });

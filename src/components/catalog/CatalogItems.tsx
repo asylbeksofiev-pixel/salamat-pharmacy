@@ -11,7 +11,8 @@ import { EmptyState, ErrorState, Notice } from "../ui/Feedback";
 import { ButtonLink } from "../ui/Button";
 import { Icon } from "../icons";
 import { CatalogSearchForm } from "./CatalogSearchForm";
-import { FavoriteButton } from "./OfferActions";
+import { CatalogCartButton, FavoriteButton } from "./OfferActions";
+import { ProductImage } from "./ProductImage";
 
 export function catalogItemHref(locale: Locale, id: string) {
   return localizedPath(locale, `/catalog/item/${id}`);
@@ -19,7 +20,7 @@ export function catalogItemHref(locale: Locale, id: string) {
 
 export function ItemPrice({ item, t, locale, size = "md" }: { item: CatalogItem; t: Dictionary; locale: Locale; size?: "md" | "lg" }) {
   if (item.price === null) return <p className={size === "lg" ? "text-lg font-semibold text-ink-soft" : "text-sm font-semibold text-ink-soft"}>{t.offer.priceUnknown}</p>;
-  return <p className={size === "lg" ? "text-3xl font-bold text-ink tabular-nums" : "text-lg font-bold text-ink tabular-nums"}>{formatKzt(item.price, locale)}</p>;
+  return <p className={size === "lg" ? "text-3xl font-bold text-ink tabular-nums" : "text-lg font-bold text-ink tabular-nums sm:text-xl"}>{formatKzt(item.price, locale)}</p>;
 }
 
 export function ItemStock({ item, t, size = "md" }: { item: CatalogItem; t: Dictionary; size?: "md" | "lg" }) {
@@ -54,61 +55,65 @@ export function PhotoCredit({ item, t, className }: { item: CatalogItem; t: Dict
   );
 }
 
-function ItemThumb({ item, t }: { item: CatalogItem; t: Dictionary }) {
-  if (item.imageUrl) {
-    return (
-      <div className="relative size-14 shrink-0 overflow-hidden rounded-[var(--radius-md)] border border-line bg-white">
-        {/* eslint-disable-next-line @next/next/no-img-element -- hosts of future product photos are not known yet */}
-        <img src={item.imageUrl} alt="" loading="lazy" decoding="async" className="absolute inset-0 size-full object-contain p-1" referrerPolicy="no-referrer" />
-      </div>
-    );
-  }
+/** Grid shared by all product lists: 2 columns on phones, 3 on tablets, 4 on wide screens. */
+export const PRODUCT_GRID = "grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 lg:grid-cols-4";
+
+/** Card frame shared by catalogue and SKU cards (hover/focus states live in globals.css → .sal-card). */
+export const CARD_FRAME =
+  "sal-card group relative flex h-full min-w-0 flex-col overflow-hidden rounded-[var(--radius-xl)] border border-line bg-white";
+
+/**
+ * Catalogue card: one per unique id. Large photo area (or the SALAMAT placeholder) on top, then the name,
+ * the SALAMAT article, the price — only when it is really known — and the main action.
+ * The whole card opens the product; the heart and the cart button sit above that link.
+ */
+export function CatalogItemCard({ item, t, locale, priority = false }: { item: CatalogItem; t: Dictionary; locale: Locale; priority?: boolean }) {
+  const href = catalogItemHref(locale, item.id);
   return (
-    <div className="grid size-12 shrink-0 place-items-center rounded-[var(--radius-md)] bg-brand-50 text-brand-600" role="img" aria-label={t.product.noImage}>
-      <Icon name="box" size={24} strokeWidth={1.5} />
-    </div>
+    <article className={CARD_FRAME} data-item-id={item.id}>
+      <div className="relative border-b border-line/70">
+        <ProductImage src={item.imageUrl} alt={item.name} noImageLabel={t.product.noImage} aspect="aspect-[5/4] lg:aspect-[4/3]" radius="rounded-none" priority={priority} />
+        <div className="absolute top-2 right-2 z-10">
+          <FavoriteButton variantId={item.id} className="size-11 border border-line/80 shadow-sm" />
+        </div>
+      </div>
+      <div className="flex flex-1 flex-col gap-1 p-3 sm:p-4">
+        {item.category ? <p className="truncate text-xs font-semibold text-brand-700">{item.category}</p> : null}
+        <h3 className="line-clamp-3 text-[0.9rem] leading-snug font-semibold break-words text-ink sm:text-[0.95rem]" title={item.name}>
+          <Link href={href} className="after:absolute after:inset-0 after:z-[1] after:content-[''] hover:text-brand-700 focus-visible:outline-none">
+            {item.name}
+          </Link>
+        </h3>
+        {item.article ? (
+          <p className="text-xs text-muted">
+            {t.items.article}: <span className="font-mono break-all text-ink-soft">{item.article}</span>
+          </p>
+        ) : null}
+        <div className="mt-auto flex flex-col gap-0.5 pt-2.5">
+          <ItemPrice item={item} t={t} locale={locale} />
+          {item.stockQuantity !== null ? <ItemStock item={item} t={t} /> : null}
+        </div>
+        <div className="relative z-10 mt-2.5">
+          <CatalogCartButton id={item.id} name={item.name} />
+        </div>
+      </div>
+    </article>
   );
 }
 
 /**
- * Catalogue card: one per unique id. Clear hierarchy — name, article, then price/stock status.
- * On phones a single-column compact card, on wider screens a grid card with an even rhythm.
+ * A list of catalogue cards. Only the first rows get the entrance animation (see .anim-list); with `reveal`
+ * (home page) cards rise in when scrolled into view instead (HomeScrollMotion).
  */
-export function CatalogItemCard({ item, t, locale }: { item: CatalogItem; t: Dictionary; locale: Locale }) {
-  const href = catalogItemHref(locale, item.id);
+export function CatalogItemGrid({ items, t, locale, className, reveal = false, grid = PRODUCT_GRID }: { items: CatalogItem[]; t: Dictionary; locale: Locale; className?: string; reveal?: boolean; grid?: string }) {
   return (
-    <article
-      className="group relative flex h-full min-w-0 flex-col gap-3 rounded-[var(--radius-xl)] border border-line bg-white p-4 transition-[box-shadow,border-color] duration-200 hover:border-brand-200 hover:shadow-[var(--shadow-card)]"
-      data-item-id={item.id}
-    >
-      <div className="flex items-start gap-3">
-        <ItemThumb item={item} t={t} />
-        <div className="min-w-0 flex-1">
-          {item.category ? <p className="mb-0.5 text-xs font-semibold text-brand-700">{item.category}</p> : null}
-          <h3 className="text-[0.95rem] leading-snug font-semibold break-words text-ink sm:line-clamp-3 sm:min-h-[3.9em]" title={item.name}>
-            <Link href={href} className="rounded-sm after:absolute after:inset-0 after:rounded-[var(--radius-xl)] after:content-[''] hover:text-brand-700 focus-visible:outline-none">
-              {item.name}
-            </Link>
-          </h3>
-          {item.article ? (
-            <p className="mt-1 text-xs text-muted">
-              {t.items.article}: <span className="font-mono break-all text-ink-soft">{item.article}</span>
-            </p>
-          ) : null}
-        </div>
-        <FavoriteButton variantId={item.id} className="relative z-10 -mt-1 -mr-1 size-10 shrink-0" />
-      </div>
-      <div className="mt-auto flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-t border-line pt-3">
-        <div className="flex min-w-0 flex-col gap-0.5">
-          <ItemPrice item={item} t={t} locale={locale} />
-          <ItemStock item={item} t={t} />
-        </div>
-        <span className="inline-flex items-center gap-0.5 text-sm font-semibold text-brand-700 transition-transform duration-200 group-hover:translate-x-0.5" aria-hidden="true">
-          {t.items.details}
-          <Icon name="chevronRight" size={16} />
-        </span>
-      </div>
-    </article>
+    <ul className={`${reveal ? "sal-home-grid" : "anim-list"} ${grid} ${className ?? ""}`}>
+      {items.map((item, i) => (
+        <li key={item.id} className="min-w-0" data-home-reveal={reveal || undefined}>
+          <CatalogItemCard item={item} t={t} locale={locale} priority={i < 2} />
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -176,13 +181,7 @@ export function CatalogItemsView({
           </Notice>
           {result.items.length ? (
             <>
-              <ul className="anim-list mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4">
-                {result.items.map((item) => (
-                  <li key={item.id} className="min-w-0">
-                    <CatalogItemCard item={item} t={t} locale={locale} />
-                  </li>
-                ))}
-              </ul>
+              <CatalogItemGrid items={result.items} t={t} locale={locale} className="mt-5" />
               <Pagination
                 page={result.page}
                 pageCount={result.pageCount}

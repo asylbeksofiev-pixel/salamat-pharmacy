@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Offer } from "@/lib/offer";
 import { fmt } from "@/lib/i18n/config";
 import { formatPhone, telHref } from "@/lib/format";
@@ -40,7 +40,8 @@ export function QuantitySelector({ value, onChange, max, labels, size = "md" }: 
 }
 
 export function FavoriteButton({ variantId, className }: { variantId: string; className?: string }) {
-  const { t } = useSite();
+  const { t, href } = useSite();
+  const toast = useToast();
   const hydrated = useHydrated();
   const favs = useFavorites();
   const on = hydrated && favs.includes(variantId);
@@ -53,6 +54,8 @@ export function FavoriteButton({ variantId, className }: { variantId: string; cl
         const adding = !favs.includes(variantId);
         favoritesStore.toggle(variantId);
         setFx((prev) => ({ kind: adding ? "add" : "remove", n: (prev?.n ?? 0) + 1 }));
+        if (adding) toast(t.request.favoriteAdded, "success", { label: t.common.favorites, href: href("/favorites") });
+        else toast(t.request.favoriteRemoved, "info");
       }}
       aria-pressed={on}
       aria-label={on ? t.offer.favoriteRemove : t.offer.favoriteAdd}
@@ -68,6 +71,50 @@ export function FavoriteButton({ variantId, className }: { variantId: string; cl
       </span>
       {fx?.kind === "add" ? <span key={`burst-${fx.n}`} className="sal-fav-burst" aria-hidden="true" /> : null}
     </button>
+  );
+}
+
+/**
+ * "Add to cart" for a catalogue product (public.pharmacy_products). The catalogue has no confirmed price or stock
+ * per pharmacy, so the line goes into the request "to be confirmed" (seenPriceKzt = null) and the pharmacy
+ * confirms both by phone. After adding, the button turns into a link to the cart, and focus follows it.
+ */
+export function CatalogCartButton({ id, name, size = "md", className }: { id: string; name: string; size?: "md" | "lg"; className?: string }) {
+  const { t, href, orderingEnabled } = useSite();
+  const toast = useToast();
+  const hydrated = useHydrated();
+  const cart = useCart();
+  const [added, setAdded] = useState(0);
+  const linkRef = useRef<HTMLAnchorElement>(null);
+  const inCart = hydrated && cart.some((l) => l.variantId === id);
+  useEffect(() => {
+    if (added && inCart) linkRef.current?.focus({ preventScroll: true });
+  }, [added, inCart]);
+  if (!orderingEnabled) return null;
+  const cls = cn("w-full gap-1.5 px-2.5", size === "md" && "text-sm sm:text-[0.95rem]", className);
+  if (inCart) {
+    return (
+      <Link ref={linkRef} href={href("/cart")} className={buttonClass("secondary", size, cls)}>
+        <span key={added} className={cn("grid place-items-center", added > 0 && "sal-cart-pop")}>
+          <Icon name="check" size={18} />
+        </span>
+        <span className="truncate">{t.offer.inCart}</span>
+      </Link>
+    );
+  }
+  return (
+    <Button
+      size={size}
+      className={cls}
+      onClick={() => {
+        cartStore.add({ variantId: id, name, seenPriceKzt: null });
+        setAdded((n) => n + 1);
+        toast(t.request.added, "success", { label: t.common.cart, href: href("/cart") });
+      }}
+    >
+      <Icon name="cart" size={18} className="shrink-0" />
+      <span className="truncate">{t.offer.addToCart}</span>
+    </Button>
   );
 }
 

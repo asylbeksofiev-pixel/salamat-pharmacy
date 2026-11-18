@@ -217,6 +217,24 @@ export async function listCatalogItemsByIds(ids: string[]): Promise<CatalogItem[
   return valid.map((id) => byId.get(id)).filter((x): x is CatalogItem => !!x);
 }
 
+/**
+ * A few catalogue products for the home page. Not "popular" or "recommended" (there is no such data): just a
+ * stable selection — products with a photo first, then names that start with a letter, then by name and id —
+ * so the set does not change between page loads while the catalogue stays the same.
+ */
+export async function listCatalogPreview(limit = 4): Promise<CatalogItem[]> {
+  const n = Math.max(1, Math.min(12, Math.floor(limit)));
+  const columns = await optionalColumns();
+  const noPhoto = columns.includes("image_url") ? Prisma.sql`(ci."photo_url" IS NULL AND "image_url" IS NULL)` : Prisma.sql`(ci."photo_url" IS NULL)`;
+  const rows = await prisma.$queryRaw<Row[]>`SELECT ${selectList(columns)} FROM ${FROM_WITH_PHOTOS}
+    WHERE btrim(coalesce("name", '')) <> ''
+    ORDER BY ${noPhoto} ASC,
+      (coalesce("name", '') ~ '^[[:alpha:]]') DESC,
+      lower(coalesce("name", '')) ASC, "id" ASC
+    LIMIT ${n}`;
+  return rows.map(toItem);
+}
+
 /** Up to `limit` matches for the header search suggestions. */
 export async function suggestCatalogItems(q: string, limit = 7): Promise<{ items: CatalogItem[]; query: string }> {
   const res = await listCatalogItems({ q, page: 1, pageSize: limit });

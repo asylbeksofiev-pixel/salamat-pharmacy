@@ -1,36 +1,48 @@
 import Image from "next/image";
-import { Icon } from "../icons";
 import { cn } from "../ui/cn";
 
 const optimisedHosts = new Set((process.env.IMAGE_HOSTS ?? "").split(",").map((h) => h.trim()).filter(Boolean));
 
-/** Product photo from an allowed source, or a neutral placeholder. */
-export function ProductImage({ src, alt, noImageLabel, className, sizes = "(max-width: 640px) 50vw, 240px", priority = false }: { src: string | null; alt: string; noImageLabel: string; className?: string; sizes?: string; priority?: boolean }) {
-  if (!src) {
-    return (
-      <div className={cn("flex aspect-square w-full flex-col items-center justify-center gap-2 rounded-[var(--radius-lg)] bg-gradient-to-br from-surface to-brand-50/60 text-brand-300", className)} role="img" aria-label={`${alt}. ${noImageLabel}`}>
-        <Icon name="box" size={40} strokeWidth={1.25} />
-        <span className="text-[0.7rem] font-medium text-muted">{noImageLabel}</span>
-      </div>
-    );
-  }
+/**
+ * Neutral SALAMAT placeholder for products without a photo: the brand mark, softened, and a short label.
+ * Never a stock photo — the visitor must not mistake it for the real packaging.
+ */
+export function ProductPlaceholder({ alt, label, className, compact = false, aspect = "aspect-square", radius = "rounded-[var(--radius-lg)]" }: { alt: string; label: string; className?: string; compact?: boolean; aspect?: string; radius?: string }) {
+  return (
+    <div
+      className={cn("relative flex w-full flex-col items-center justify-center gap-2 overflow-hidden bg-[linear-gradient(160deg,var(--color-surface),var(--color-brand-50))]", aspect, radius, className)}
+      role="img"
+      aria-label={label ? `${alt}. ${label}` : alt}
+    >
+      <span className={cn("relative block opacity-30 grayscale-[35%]", compact ? "w-[46%]" : "w-[30%] max-w-24")} aria-hidden="true">
+        <Image src="/brand/salamat-mark.png" alt="" width={200} height={200} sizes="96px" className="h-auto w-full" />
+      </span>
+      {label && !compact ? <span className="px-3 text-center text-[0.72rem] leading-tight font-medium text-muted">{label}</span> : null}
+    </div>
+  );
+}
+
+/** Product photo from an allowed source, or a neutral placeholder. The photo always fits whole (object-contain). */
+export function ProductImage({ src, alt, noImageLabel, className, sizes = "(max-width: 640px) 50vw, 280px", priority = false, compact = false, aspect = "aspect-square", radius = "rounded-[var(--radius-lg)]" }: { src: string | null; alt: string; noImageLabel: string; className?: string; sizes?: string; priority?: boolean; compact?: boolean; aspect?: string; radius?: string }) {
+  if (!src) return <ProductPlaceholder alt={alt} label={noImageLabel} className={className} compact={compact} aspect={aspect} radius={radius} />;
   let host = "";
   try {
     host = new URL(src).hostname;
   } catch {
     /* invalid URL */
   }
+  const imgClass = "object-contain p-[8%] transition-transform duration-500 ease-[var(--ease-out-soft)] motion-safe:group-hover:scale-[1.03]";
   if (host && optimisedHosts.has(host)) {
     return (
-      <div className={cn("relative aspect-square w-full overflow-hidden rounded-[var(--radius-lg)] bg-white", className)}>
-        <Image src={src} alt={alt} fill sizes={sizes} priority={priority} className="object-contain p-3" />
+      <div className={cn("relative w-full overflow-hidden bg-white", aspect, radius, className)}>
+        <Image src={src} alt={alt} fill sizes={sizes} priority={priority} className={imgClass} />
       </div>
     );
   }
   return (
-    <div className={cn("relative aspect-square w-full overflow-hidden rounded-[var(--radius-lg)] bg-white", className)}>
+    <div className={cn("relative w-full overflow-hidden bg-white", aspect, radius, className)}>
       {/* eslint-disable-next-line @next/next/no-img-element -- host not configured for optimisation */}
-      <img src={src} alt={alt} loading={priority ? "eager" : "lazy"} decoding="async" className="absolute inset-0 size-full object-contain p-3" referrerPolicy="no-referrer" />
+      <img src={src} alt={alt} loading={priority ? "eager" : "lazy"} decoding="async" className={cn("absolute inset-0 size-full", imgClass)} referrerPolicy="no-referrer" />
     </div>
   );
 }

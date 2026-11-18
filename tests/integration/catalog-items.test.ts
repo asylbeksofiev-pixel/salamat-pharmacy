@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { prisma } from "@/server/db";
-import { catalogTokens, getCatalogItem, isCatalogId, listCatalogItems, listCatalogItemsByIds, suggestCatalogItems } from "@/server/catalog-items";
+import { catalogTokens, getCatalogItem, isCatalogId, listCatalogItems, listCatalogItemsByIds, listCatalogPreview, suggestCatalogItems } from "@/server/catalog-items";
 
 async function tableCount() {
   const r = await prisma.$queryRaw<{ n: bigint }[]>`SELECT count(*) AS n FROM public.pharmacy_products`;
@@ -127,6 +127,18 @@ describe("catalogue from public.pharmacy_products", () => {
       expect((await getCatalogItem(item.id))?.imageUrl).toBeNull();
     } finally {
       await prisma.catalogImage.delete({ where: { barcode: "ASP-100" } });
+    }
+  });
+
+  it("home preview: up to 4 real products in a stable order, names starting with a letter first", async () => {
+    const a = await listCatalogPreview(4);
+    const b = await listCatalogPreview(4);
+    expect(a).toHaveLength(Math.min(4, await tableCount()));
+    expect(a.map((i) => i.id)).toEqual(b.map((i) => i.id));
+    for (const item of a) {
+      expect(item.name).toMatch(/^\p{L}/u);
+      expect(item.price).toBeNull();
+      expect(await getCatalogItem(item.id)).not.toBeNull();
     }
   });
 });

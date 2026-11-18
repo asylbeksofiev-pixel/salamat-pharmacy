@@ -4,16 +4,16 @@ import { useRouter } from "next/navigation";
 import { useRef, useState, type FormEvent } from "react";
 import { cartStore } from "@/lib/client/stores";
 import { fmt } from "@/lib/i18n/config";
-import { formatKzt } from "@/lib/format";
 import type { Quote } from "@/server/orders/quote";
 import { useSite } from "../site/SiteProvider";
 import { PharmacyChip } from "../site/HeaderParts";
-import { Button, ButtonLink } from "../ui/Button";
+import { Button, ButtonLink, Spinner } from "../ui/Button";
 import { Checkbox, Input, Radio, Textarea } from "../ui/Field";
 import { EmptyState, Notice, Skeleton } from "../ui/Feedback";
 import { useToast } from "../ui/Toast";
 import { useQuote } from "./useQuote";
-import { LinePrice, noteText } from "./CartView";
+import { LinePrice, QuoteTotals, noteText } from "./CartView";
+import { Icon } from "../icons";
 
 const KEY_STORAGE = "salamat_checkout_key";
 
@@ -48,6 +48,8 @@ export function CheckoutView() {
   const { lines, quote, loading, notes, hydrated, applyQuoteNotes, setQuote } = useQuote(pharmacy?.id ?? null, locale);
   const [errors, setErrors] = useState<FieldErrors>({});
   const [submitting, setSubmitting] = useState(false);
+  // Set once the request is saved: the cart is cleared, but the page must not flash "cart is empty".
+  const [sent, setSent] = useState(false);
   const [phone, setPhone] = useState("");
   const [method, setMethod] = useState<"PICKUP" | "DELIVERY">("PICKUP");
   const inFlight = useRef(false);
@@ -55,10 +57,18 @@ export function CheckoutView() {
   const e = t.checkout.errors as Record<string, string>;
 
   if (!hydrated) return <div className="container-page py-8"><Skeleton className="h-96" /></div>;
+  if (sent) {
+    return (
+      <div className="container-page flex flex-col items-center gap-3 py-16 text-center" role="status" aria-live="polite">
+        <Spinner className="size-6 text-brand-600" />
+        <p className="font-semibold text-ink">{t.checkout.submitting}</p>
+      </div>
+    );
+  }
   if (!lines.length) {
     return (
-      <div className="container-page py-8">
-        <h1 className="text-[1.75rem] font-bold">{t.checkout.title}</h1>
+      <div className="container-page py-6 md:py-10">
+        <h1 className="text-[1.75rem] leading-tight font-bold tracking-tight sm:text-[2.25rem]">{t.checkout.title}</h1>
         <EmptyState className="mt-6" icon="cart" title={t.cart.empty} text={t.cart.emptyText} action={<ButtonLink href={href("/catalog")}>{t.cart.toCatalog}</ButtonLink>} />
       </div>
     );
@@ -103,6 +113,7 @@ export function CheckoutView() {
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok && data.publicId) {
+        setSent(true);
         cartStore.clear();
         try {
           sessionStorage.removeItem(KEY_STORAGE);
@@ -138,13 +149,22 @@ export function CheckoutView() {
   const noteList = Object.entries(notes).filter(([id]) => lines.some((l) => l.variantId === id));
 
   return (
-    <div className="container-page py-6 md:py-8">
+    <div className="container-page py-6 md:py-10">
       <nav className="text-sm">
-        <Link href={href("/cart")} className="text-muted hover:text-brand-700">← {t.cart.title}</Link>
+        <Link href={href("/cart")} className="inline-flex items-center gap-1 py-1 font-medium text-muted hover:text-brand-700">
+          <Icon name="chevronLeft" size={16} />
+          {t.cart.title}
+        </Link>
       </nav>
-      <h1 className="mt-3 text-[1.75rem] font-bold tracking-tight sm:text-[2.1rem]">{t.checkout.title}</h1>
-      <Notice tone="info" className="mt-4">{t.checkout.requestNotOrder}</Notice>
-      <form noValidate onSubmit={onSubmit} className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_26rem]">
+      <h1 className="mt-2 text-[1.75rem] leading-tight font-bold tracking-tight sm:text-[2.25rem]">{t.checkout.title}</h1>
+      {quote?.hasUnpriced ? (
+        <Notice tone="info" title={t.request.modeTitle} className="mt-4">
+          {t.request.modeText}
+        </Notice>
+      ) : (
+        <Notice tone="info" className="mt-4">{t.checkout.requestNotOrder}</Notice>
+      )}
+      <form noValidate onSubmit={onSubmit} className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_26rem] lg:gap-8">
         <div className="flex flex-col gap-6">
           {errorList.length ? (
             <div ref={errorSummary} tabIndex={-1} role="alert" className="rounded-[var(--radius-md)] border border-accent-100 bg-accent-50 px-4 py-3 text-accent-700 outline-none">
@@ -153,7 +173,7 @@ export function CheckoutView() {
               </ul>
             </div>
           ) : null}
-          <fieldset className="rounded-[var(--radius-xl)] border border-line bg-white p-5">
+          <fieldset className="rounded-[var(--radius-xl)] border border-line bg-white p-5 sm:p-6">
             <legend className="px-1 text-lg font-semibold">{t.checkout.contacts}</legend>
             <div className="mt-2 grid gap-4 sm:grid-cols-2">
               <Input name="name" label={t.checkout.name} placeholder={t.checkout.namePlaceholder} autoComplete="given-name" required maxLength={80} error={errors.name} />
@@ -172,20 +192,25 @@ export function CheckoutView() {
               />
             </div>
           </fieldset>
-          <fieldset className="rounded-[var(--radius-xl)] border border-line bg-white p-5">
+          <fieldset className="rounded-[var(--radius-xl)] border border-line bg-white p-5 sm:p-6">
             <legend className="px-1 text-lg font-semibold">{t.checkout.method}</legend>
-            <div className="mt-2 grid gap-3 sm:grid-cols-2">
-              <Radio name="method" value="PICKUP" checked={method === "PICKUP"} onChange={() => setMethod("PICKUP")} label={t.checkout.pickup} description={t.checkout.pickupHint} />
-              <Radio
-                name="method"
-                value="DELIVERY"
-                checked={method === "DELIVERY"}
-                onChange={() => setMethod("DELIVERY")}
-                disabled={!quote?.deliveryEnabled}
-                label={t.checkout.delivery}
-                description={quote?.deliveryEnabled ? undefined : t.checkout.deliveryUnavailable}
-              />
-            </div>
+            {/* Delivery is offered only when it is really switched on in the settings; otherwise pickup only. */}
+            {quote?.deliveryEnabled ? (
+              <div className="mt-2 grid gap-3 sm:grid-cols-2">
+                <Radio name="method" value="PICKUP" checked={method === "PICKUP"} onChange={() => setMethod("PICKUP")} label={t.checkout.pickup} description={t.checkout.pickupHint} />
+                <Radio name="method" value="DELIVERY" checked={method === "DELIVERY"} onChange={() => setMethod("DELIVERY")} label={t.checkout.delivery} />
+              </div>
+            ) : (
+              <div className="mt-2 flex items-start gap-3 rounded-[var(--radius-lg)] border border-brand-200 bg-brand-50/60 p-4">
+                <span className="grid size-10 shrink-0 place-items-center rounded-full bg-white text-brand-700">
+                  <Icon name="store" size={20} />
+                </span>
+                <span>
+                  <span className="block font-semibold text-ink">{t.checkout.pickup}</span>
+                  <span className="mt-0.5 block text-sm text-muted">{t.checkout.pickupHint}</span>
+                </span>
+              </div>
+            )}
             {method === "DELIVERY" && quote?.deliveryEnabled ? (
               <div className="mt-4">
                 <Input name="deliveryAddress" label={t.checkout.deliveryAddress} required maxLength={300} error={errors.deliveryAddress} />
@@ -197,7 +222,7 @@ export function CheckoutView() {
               {errors.pharmacyId ? <p className="mt-1 text-sm font-medium text-accent-600" role="alert">{errors.pharmacyId}</p> : null}
             </div>
           </fieldset>
-          <fieldset className="rounded-[var(--radius-xl)] border border-line bg-white p-5">
+          <fieldset className="rounded-[var(--radius-xl)] border border-line bg-white p-5 sm:p-6">
             <legend className="sr-only">{t.checkout.comment}</legend>
             <Textarea name="comment" label={t.checkout.comment} placeholder={t.checkout.commentPlaceholder} maxLength={500} rows={3} error={errors.comment} />
             <div className="mt-4">
@@ -218,7 +243,7 @@ export function CheckoutView() {
           </fieldset>
         </div>
         <aside className="flex flex-col gap-4 self-start lg:sticky lg:top-36">
-          <div className="rounded-[var(--radius-xl)] border border-line bg-white p-5 shadow-[var(--shadow-card)]">
+          <div className="rounded-[var(--radius-xl)] border border-line bg-white p-5 shadow-[var(--shadow-card)] sm:p-6">
             <h2 className="text-lg font-semibold">{t.checkout.summary}</h2>
             {noteList.length ? (
               <Notice tone="warning" className="mt-3">
@@ -231,7 +256,8 @@ export function CheckoutView() {
               {(quote?.lines ?? []).map((l) => (
                 <li key={l.variantId} className="flex items-start justify-between gap-3 py-3">
                   <span className="min-w-0">
-                    <span className="block text-[0.95rem] leading-snug font-medium">{l.fullName}</span>
+                    <span className="block text-[0.95rem] leading-snug font-medium break-words">{l.fullName}</span>
+                    {l.article ? <span className="block text-xs text-muted">{t.items.article}: <span className="font-mono break-all">{l.article}</span></span> : null}
                     <span className="text-sm text-muted">{l.quantity} {t.common.pieces}</span>
                     {l.blocking ? <span className="block text-sm text-accent-600">{t.cart.becameUnavailable}</span> : null}
                   </span>
@@ -239,13 +265,7 @@ export function CheckoutView() {
                 </li>
               ))}
             </ul>
-            <div className="mt-2 border-t border-line pt-4">
-              <div className="flex items-baseline justify-between gap-3">
-                <span className="text-ink-soft">{quote?.hasUnpriced ? t.cart.totalPartial : t.cart.total}</span>
-                <span className="text-2xl font-bold">{quote && quote.totalKzt > 0 ? formatKzt(quote.totalKzt, locale) : "—"}</span>
-              </div>
-              {quote?.hasUnpriced ? <p className="mt-2 text-sm text-muted">{t.cart.unpricedNote}</p> : null}
-            </div>
+            <div className="mt-2 border-t border-line pt-4">{quote ? <QuoteTotals quote={quote} t={t} locale={locale} /> : <p className="text-sm text-muted">{t.cart.checking}</p>}</div>
             <Button type="submit" size="lg" className="mt-5 w-full" loading={submitting} disabled={!quote || quote.hasBlocking || !pharmacy}>
               {submitting ? t.checkout.submitting : t.checkout.submit}
             </Button>
