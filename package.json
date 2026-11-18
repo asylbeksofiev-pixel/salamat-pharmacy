@@ -21,7 +21,8 @@
     "templates:build": "tsx scripts/make-templates.ts",
     "postinstall": "prisma generate",
     "db:catalog-fixture": "node scripts/catalog-fixture.mjs",
-    "photos": "tsx scripts/catalog-photos/run.ts"
+    "photos": "tsx scripts/catalog-photos/run.ts",
+    "photos:nct": "tsx scripts/catalog-photos/nct-run.ts"
   },
   "dependencies": {
     "@fontsource-variable/onest": "^5.3.1",

@@ -108,6 +108,11 @@ export class Http {
           await sleep(delay);
           continue;
         }
+        // Adaptive pacing: server errors slow this host down (×1.25, up to 30 s); successes slowly return to the base pace.
+        const base = HOST_INTERVAL_MS[host] ?? DEFAULT_INTERVAL;
+        const cur = this.interval.get(host) ?? base;
+        if (res.status >= 500) this.interval.set(host, Math.min(30_000, Math.round(cur * 1.25)));
+        else if (res.status < 400 && cur > base) this.interval.set(host, Math.max(base, Math.round(cur * 0.97)));
         const declared = Number(res.headers.get("content-length"));
         if (declared > maxBytes) {
           await res.body?.cancel();

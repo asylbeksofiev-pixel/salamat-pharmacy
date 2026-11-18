@@ -96,6 +96,9 @@ function normalise(name: string): string {
     .toLowerCase()
     .normalize("NFC")
     .replace(/ё/g, "е")
+    // "120 veg.caps", "60 VCAP", "90 растительных капсул", "30 мягких капсул" → "<n> caps" / "<n> капс"
+    .replace(/(\d+)\s*(?:veg(?:gie|etarian)?\.?\s*)?(?:v?caps?(?:ules?)?|softgels?)\b/g, "$1 caps")
+    .replace(/(\d+)\s+(?:растительных|мягких|жевательных|шипучих|желатиновых|вагинальных)\s+(капс|табл|таб)/g, "$1 $2")
     .replace(/\s+/g, " ");
 }
 

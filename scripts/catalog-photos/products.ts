@@ -1,5 +1,6 @@
 // Reading products. public.pharmacy_products is read-only in production: every query runs in a READ ONLY
 // transaction, pages by the unique id (keyset pagination, so resuming from the last id never skips or repeats rows).
+import { readFile, writeFile } from "node:fs/promises";
 import { PrismaClient } from "@prisma/client";
 import type { ProductRef } from "../../src/lib/catalog-photos/match";
 import type { Http } from "./http";
@@ -90,6 +91,106 @@ export class SiteApiReader implements ProductReader {
   async total() {
     const res = await this.http.fetchBytes(`${this.base}/api/catalog/items?pageSize=1`);
     return JSON.parse(res.body.toString("utf8")).total as number;
+  }
+
+  async close() {}
+}
+
+export interface SnapshotMeta {
+  source: string;
+  fetchedAt: string;
+  total: number;
+  uniqueIds: number;
+  pages: number;
+  withImage: number;
+  duplicateArticles: number;
+  productsInDuplicateArticles: number;
+}
+
+/**
+ * Copies the whole catalogue (id, article, name, imageUrl) through the public read-only API, page by page, and stores it
+ * sorted by the unique id. The API orders by name with id as the tie-breaker, so pages neither repeat nor skip rows;
+ * the result is still checked: the number of unique ids must equal the reported total, otherwise the scan is repeated.
+ */
+export async function takeSnapshot(base: string, http: Http, file: string, log: (m: string) => void): Promise<SnapshotMeta> {
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    const byId = new Map<string, ProductRef & { imageUrl: string | null }>();
+    let total = 0;
+    let pages = 0;
+    for (let page = 1; ; page++) {
+      const res = await http.fetchBytes(`${base}/api/catalog/items?page=${page}&pageSize=48`);
+      if (res.status !== 200) throw new Error(`catalogue API answered ${res.status} on page ${page}`);
+      const j = JSON.parse(res.body.toString("utf8")) as { items: { id: string; article: string | null; name: string; imageUrl: string | null }[]; total: number; pageCount: number };
+      total = j.total;
+      pages = j.pageCount;
+      for (const it of j.items) byId.set(String(it.id), { id: String(it.id), article: it.article ?? null, name: it.name ?? "", imageUrl: it.imageUrl ?? null });
+      if (page % 50 === 0) log(`  страница ${page}/${j.pageCount}, товаров ${byId.size}`);
+      if (page >= j.pageCount) break;
+    }
+    if (byId.size !== total) {
+      log(`  уникальных id ${byId.size}, а total ${total} — каталог менялся во время чтения, повтор (${attempt}/3)`);
+      continue;
+    }
+    const rows = [...byId.values()].sort((a, b) => (BigInt(a.id) < BigInt(b.id) ? -1 : 1));
+    const articles = new Map<string, number>();
+    for (const r of rows) {
+      const a = (r.article ?? "").trim();
+      if (a) articles.set(a, (articles.get(a) ?? 0) + 1);
+    }
+    const dups = [...articles.values()].filter((n) => n > 1);
+    await writeFile(file, rows.map((r) => JSON.stringify(r)).join("\n") + "\n");
+    return {
+      source: `${base}/api/catalog/items`,
+      fetchedAt: new Date().toISOString(),
+      total,
+      uniqueIds: rows.length,
+      pages,
+      withImage: rows.filter((r) => r.imageUrl).length,
+      duplicateArticles: dups.length,
+      productsInDuplicateArticles: dups.reduce((s, n) => s + n, 0),
+    };
+  }
+  throw new Error("the catalogue kept changing during the scan; try again later");
+}
+
+/** Reads a snapshot made by takeSnapshot: batches by id (keyset), duplicates by article. */
+export class SnapshotReader implements ProductReader {
+  private rows: ProductRef[] = [];
+  constructor(private readonly file: string) {}
+
+  private async load() {
+    if (!this.rows.length) {
+      this.rows = (await readFile(this.file, "utf8"))
+        .split("\n")
+        .filter(Boolean)
+        .map((l) => {
+          const r = JSON.parse(l);
+          return { id: String(r.id), article: r.article ?? null, name: r.name ?? "" };
+        });
+    }
+    return this.rows;
+  }
+
+  async batch(afterId: bigint, limit: number) {
+    return (await this.load()).filter((r) => BigInt(r.id) > afterId).slice(0, limit);
+  }
+
+  async byIds(ids: string[]) {
+    const want = new Set(ids);
+    return (await this.load()).filter((r) => want.has(r.id));
+  }
+
+  async duplicates() {
+    const by = new Map<string, ProductRef[]>();
+    for (const r of await this.load()) {
+      const a = (r.article ?? "").trim();
+      if (a) by.set(a, [...(by.get(a) ?? []), r]);
+    }
+    return new Map([...by].filter(([, v]) => v.length > 1));
+  }
+
+  async total() {
+    return (await this.load()).length;
   }
 
   async close() {}

@@ -3,6 +3,7 @@
 //
 //   npm run photos -- process [--ids 1,2,3 | --ids-file ids.txt] [--limit N] [--batch 50] [--concurrency 3]
 //                             [--site-api https://…] [--inbox DIR] [--no-nct] [--restart] [--force] [--work-dir DIR]
+//   npm run photos -- snapshot [--site-api https://…] [--work-dir DIR]
 //   npm run photos -- report  [--work-dir DIR]
 //   npm run photos -- publish --manifest DIR/manifest.csv --sources salamat,off --confirm-rights [--production] [--dry]
 //
@@ -21,7 +22,7 @@ import { describeAttributes, parseAttributes } from "../../src/lib/catalog-photo
 import { conflictingDuplicates, decide, sourceRank, type Candidate, type ProductRef, type ReviewStatus } from "../../src/lib/catalog-photos/match";
 import { Http, HttpError } from "./http";
 import { loadOriginal, processImage, type ProcessedImage, type VariantKey } from "./image";
-import { DbReader, SiteApiReader, type ProductReader } from "./products";
+import { DbReader, SiteApiReader, SnapshotReader, takeSnapshot, type ProductReader } from "./products";
 import { SalamatInbox, lookupNct, lookupOpenFacts, type LookupContext } from "./sources";
 
 // ---------------------------------------------------------------- options
@@ -41,6 +42,7 @@ const paths = {
   versions: join(workDir, "versions.json"),
   urlIndex: join(workDir, "url-index.json"),
   cache: join(workDir, "http-cache"),
+  snapshot: join(workDir, "products.jsonl"),
 };
 const siteUrl = (process.env.APP_URL || "https://salamat-pharmacy.vercel.app").replace(/\/$/, "");
 const userAgent = `SalamatCatalogPhotos/1.0 (+${process.env.PHOTO_BOT_CONTACT || siteUrl})`;
@@ -253,7 +255,16 @@ async function runProcess() {
   const http = new Http({ userAgent, cacheDir: paths.cache, log: (e) => void journal(e) });
   const dbUrl = process.env.PHOTOS_DATABASE_URL || process.env.DATABASE_URL;
   const siteApi = opt("site-api");
-  const reader: ProductReader = siteApi ? new SiteApiReader(siteApi.replace(/\/$/, ""), http) : dbUrl ? new DbReader(dbUrl) : (() => { throw new Error("Set DATABASE_URL (read-only access is enough) or pass --site-api for an --ids sample"); })();
+  const productsFile = opt("products-file") ?? (existsSync(paths.snapshot) && !dbUrl ? paths.snapshot : undefined);
+  const reader: ProductReader = productsFile
+    ? new SnapshotReader(productsFile)
+    : siteApi
+      ? new SiteApiReader(siteApi.replace(/\/$/, ""), http)
+      : dbUrl
+        ? new DbReader(dbUrl)
+        : (() => {
+            throw new Error("Set DATABASE_URL (read-only access is enough), run `snapshot` first, or pass --site-api for an --ids sample");
+          })();
   const ctx: Ctx = {
     http,
     inbox: await SalamatInbox.load(opt("inbox") ?? process.env.PHOTOS_INBOX_DIR ?? null),
@@ -514,7 +525,20 @@ async function runPublish() {
 
 // ---------------------------------------------------------------- main
 
-const commands: Record<string, () => Promise<void>> = { process: runProcess, report: runReport, publish: runPublish };
+// ---------------------------------------------------------------- snapshot
+
+/** Copies the production catalogue (id, article, name) through the site's public read-only API into products.jsonl. */
+async function runSnapshot() {
+  const base = (opt("site-api") ?? siteUrl).replace(/\/$/, "");
+  const http = new Http({ userAgent });
+  console.log(`Читаю каталог: ${base}/api/catalog/items`);
+  const meta = await takeSnapshot(base, http, paths.snapshot, (m) => console.log(m));
+  await writeFile(join(workDir, "snapshot.json"), JSON.stringify(meta, null, 2));
+  await journal({ event: "snapshot", ...meta });
+  console.log(JSON.stringify(meta, null, 2));
+}
+
+const commands: Record<string, () => Promise<void>> = { snapshot: runSnapshot, process: runProcess, report: runReport, publish: runPublish };
 if (!commands[command]) {
   console.error("Команды: process | report | publish (см. docs/catalog-photos.md)");
   process.exit(2);

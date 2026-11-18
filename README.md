@@ -104,7 +104,8 @@ npm run db:demo
 | `npm run orders:anonymize` | обезличивание контактов в старых заявках по сроку хранения |
 | `npm run templates:build` | пересоздать шаблоны импорта `data/templates/*` |
 | `npm run db:migrate:dev` | создать новую миграцию после изменения `prisma/schema.prisma` |
-| `npm run photos -- process \| report \| publish` | поиск, проверка и публикация фото товаров в Vercel Blob (`docs/catalog-photos.md`) |
+| `npm run photos -- snapshot \| process \| report \| publish` | снимок каталога, поиск, проверка и публикация фото товаров в Vercel Blob (`docs/catalog-photos.md`) |
+| `npm run photos:nct -- run \| report` | полный проход по Национальному каталогу товаров: кандидаты, оценка совпадений, список правообладателей (`docs/catalog-photos-nct.md`) |
 
 ## Структура
 
@@ -132,6 +133,7 @@ docs/                аудит источников, дизайн-систем�
 * `docs/catalog-products.md` — каталог из таблицы `pharmacy_products`: API, поиск, индексы, будущие столбцы
 * `docs/catalog-photos.md` — фото товаров: источники и права (НКТ, Open Food Facts), правила сопоставления, Blob, стоимость
 * `docs/catalog-photos-dry-run.md` — пробный прогон на 40 товарах production
+* `docs/catalog-photos-nct.md`, `docs/catalog-photos-nct-results.md` — НКТ: права на фото (первоисточники), метод поиска и итог полного прохода
 * `docs/data-import.md` — формат файла, правила сопоставления, API учётной системы
 * `docs/launch-checklist.md` — что нужно для запуска и результаты проверок
 
