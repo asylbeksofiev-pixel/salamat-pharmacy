@@ -44,15 +44,29 @@ export function FavoriteButton({ variantId, className }: { variantId: string; cl
   const hydrated = useHydrated();
   const favs = useFavorites();
   const on = hydrated && favs.includes(variantId);
+  // Each click restarts the effect (key): a pop with a small burst when adding, a soft shrink when removing.
+  const [fx, setFx] = useState<{ kind: "add" | "remove"; n: number } | null>(null);
   return (
     <button
       type="button"
-      onClick={() => favoritesStore.toggle(variantId)}
+      onClick={() => {
+        const adding = !favs.includes(variantId);
+        favoritesStore.toggle(variantId);
+        setFx((prev) => ({ kind: adding ? "add" : "remove", n: (prev?.n ?? 0) + 1 }));
+      }}
       aria-pressed={on}
       aria-label={on ? t.offer.favoriteRemove : t.offer.favoriteAdd}
-      className={cn("grid size-10 place-items-center rounded-full bg-white/90 transition-colors hover:bg-white", on ? "text-accent-500" : "text-muted hover:text-accent-500", className)}
+      className={cn(
+        "sal-fav relative grid size-10 touch-manipulation place-items-center rounded-full bg-white/90 transition-[color,background-color,transform] duration-150 select-none hover:bg-white",
+        "focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-brand-600 motion-safe:active:scale-90",
+        on ? "text-accent-500" : "text-muted hover:text-accent-500",
+        className,
+      )}
     >
-      <Icon name={on ? "heartFilled" : "heart"} size={20} />
+      <span key={fx?.n ?? 0} className={cn("grid place-items-center", fx?.kind === "add" && "sal-fav-pop", fx?.kind === "remove" && "sal-fav-out")}>
+        <Icon name={on ? "heartFilled" : "heart"} size={20} />
+      </span>
+      {fx?.kind === "add" ? <span key={`burst-${fx.n}`} className="sal-fav-burst" aria-hidden="true" /> : null}
     </button>
   );
 }

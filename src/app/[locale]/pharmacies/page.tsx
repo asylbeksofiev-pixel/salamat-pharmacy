@@ -8,6 +8,7 @@ import { Breadcrumbs } from "@/components/ui/Breadcrumbs";
 import { Notice, EmptyState } from "@/components/ui/Feedback";
 import { PharmacyCard } from "@/components/catalog/Tiles";
 import { Icon } from "@/components/icons";
+import { PharmacyMap, type MapPharmacy } from "@/components/pharmacy/PharmacyMap";
 
 export async function generateMetadata({ params, searchParams }: PageProps<"/[locale]/pharmacies">) {
   const { locale } = await params;
@@ -25,8 +26,15 @@ export default async function PharmaciesPage({ params, searchParams }: PageProps
   const q = typeof sp.q === "string" ? sp.q.trim().slice(0, 80) : "";
   const [all, selected] = await Promise.all([getPharmacies(locale), getSelectedPharmacy(locale)]);
   const needle = q.toLowerCase().replace(/ё/g, "е");
-  const list = needle ? all.filter((p) => `${p.address} ${p.addressRu}`.toLowerCase().replace(/ё/g, "е").includes(needle)) : all;
+  const list = needle ? all.filter((p) => `${p.address} ${p.addressRu} ${p.city} ${p.cityRu}`.toLowerCase().replace(/ё/g, "е").includes(needle)) : all;
   const anyCoords = all.some((p) => p.latitude !== null);
+  // Same records as the cards below: the map and the list always show the same pharmacies.
+  const onMap: MapPharmacy[] = list.flatMap((p) =>
+    p.latitude !== null && p.longitude !== null
+      ? [{ id: p.id, address: p.address, city: p.city, phones: p.phones, lat: p.latitude, lng: p.longitude, href: localizedPath(locale, `/pharmacies/${p.slug}`) }]
+      : [],
+  );
+  const withoutCoords = list.length - onMap.length;
   const anyUnverified = all.some((p) => !p.verifiedAt);
   return (
     <div className="container-page py-6 md:py-8">
@@ -50,6 +58,12 @@ export default async function PharmaciesPage({ params, searchParams }: PageProps
         {!anyCoords ? <Notice tone="info" icon="pin">{t.pharmacy.mapUnavailable}</Notice> : null}
         {anyUnverified ? <Notice tone="warning">{t.pharmacy.dataNeedsCheck}</Notice> : null}
       </div>
+      {onMap.length ? (
+        <div className="mt-6">
+          <PharmacyMap pharmacies={onMap} selectedId={selected?.id ?? null} />
+          {withoutCoords > 0 ? <p className="mt-2 text-sm text-muted">{fmt(t.pharmacy.mapWithoutCoords, { count: withoutCoords })}</p> : null}
+        </div>
+      ) : null}
       {list.length ? (
         <ul className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {list.map((p) => (

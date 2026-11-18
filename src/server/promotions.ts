@@ -15,6 +15,8 @@ export interface PromotionView {
   startsAt: string;
   endsAt: string | null;
   state: "active" | "ended" | "upcoming";
+  /** Whole days until the end (rounded up), null without an end date. */
+  daysLeft: number | null;
   appliesToAllPharmacies: boolean;
   pharmacies: { slug: string; address: string }[];
   categories: { slug: string; name: string }[];
@@ -51,6 +53,7 @@ function toView(p: Row, locale: Locale, now: Date): PromotionView {
     startsAt: p.startsAt.toISOString(),
     endsAt: p.endsAt?.toISOString() ?? null,
     state: stateOf(p, now),
+    daysLeft: p.endsAt ? Math.ceil((p.endsAt.getTime() - now.getTime()) / 86_400_000) : null,
     appliesToAllPharmacies: p.appliesToAllPharmacies,
     pharmacies: p.pharmacies
       .filter((x) => x.pharmacy.isActive)

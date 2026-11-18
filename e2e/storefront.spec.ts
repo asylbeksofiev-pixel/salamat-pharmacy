@@ -92,6 +92,37 @@ test("favourites: the heart on a catalogue card saves the product and the favour
   await expect(main).toContainText("В избранном пока ничего нет");
 });
 
+test("branches: closed ones are gone, new ones are listed and mapped, nearest pharmacy is found", async ({ page, context }) => {
+  await page.goto("/pharmacies");
+  const main = page.locator("main");
+  await expect(main).toContainText("Аптек: 17");
+  await expect(main.locator("article")).toHaveCount(17);
+  await expect(main).not.toContainText("д. 36, н.п. 8");
+  await expect(main).not.toContainText("д. 49, н.п. 1");
+  for (const a of ["пр. Мәңгілік Ел, д. 24", "ул. Ж. Нажимеденова, д. 13", "ул. Есет батыра, д. 11 (Ильинка 2)", "с. Жибек Жолы, ул. Курманова, д. 8/3", "пр. Туран, д. 55, н.п. 8"]) {
+    await expect(main).toContainText(a);
+  }
+  const card24 = main.locator("article", { hasText: "пр. Мәңгілік Ел, д. 24" });
+  await expect(card24).toContainText("8 (702) 531 44 85");
+  await expect(main.locator('a[href="tel:+77025314485"]')).toHaveCount(1);
+  // The placeholder phone from the branch file is never shown.
+  await expect(main.locator('a[href="tel:+77000000000"]')).toHaveCount(0);
+  await expect(main.locator("article", { hasText: "пр. Туран" })).toContainText("Телефон уточняется");
+  // Every listed branch has a marker; closed branch pages are gone.
+  await expect(page.locator(".sal-pin")).toHaveCount(17);
+  expect((await page.goto("/pharmacies/mangilik-el-49"))?.status()).toBe(404);
+  // Geolocation: the visitor stands next to пр. Мәңгілік Ел, 24.
+  await context.grantPermissions(["geolocation"]);
+  await context.setGeolocation({ latitude: 51.115, longitude: 71.433 });
+  await page.goto("/pharmacies");
+  await page.getByRole("button", { name: "Найти ближайшую аптеку" }).click().catch(() => undefined);
+  const nearestBox = page.locator("section[aria-labelledby=nearest-title]");
+  await expect(nearestBox).toContainText("пр. Мәңгілік Ел, д. 24");
+  await expect(nearestBox).toContainText("8 (702) 531 44 85");
+  await expect(page.locator(".sal-me-label")).toHaveText("Вы здесь");
+  await expect(page.locator(".leaflet-popup-content")).toContainText("Построить маршрут");
+});
+
 test("catalogue API never exposes database credentials", async ({ request }) => {
   const res = await request.get("/api/catalog/items?q=%D0%BF%D0%B0%D1%80%D0%B0&pageSize=500");
   expect(res.status()).toBe(200);

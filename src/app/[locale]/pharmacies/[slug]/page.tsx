@@ -11,6 +11,7 @@ import { Breadcrumbs } from "@/components/ui/Breadcrumbs";
 import { Badge, Notice } from "@/components/ui/Feedback";
 import { SelectPharmacyButton } from "@/components/catalog/SelectPharmacyButton";
 import { Icon } from "@/components/icons";
+import { PharmacyMap } from "@/components/pharmacy/PharmacyMap";
 
 export async function generateMetadata({ params }: PageProps<"/[locale]/pharmacies/[slug]">) {
   const { locale, slug } = await params;
@@ -74,6 +75,7 @@ export default async function PharmacyPage({ params }: PageProps<"/[locale]/phar
           </div>
           <section aria-labelledby="ph-phones" className="rounded-[var(--radius-xl)] border border-line p-5">
             <h2 id="ph-phones" className="mb-3 font-semibold">{t.pharmacy.phone}</h2>
+            {!p.phones.length ? <p className="text-muted">{t.pharmacy.phoneUnknown}</p> : null}
             <ul className="flex flex-col gap-2">
               {p.phones.map((ph) => (
                 <li key={ph}>
@@ -105,12 +107,11 @@ export default async function PharmacyPage({ params }: PageProps<"/[locale]/phar
         </div>
         <div>
           {hasCoords ? (
-            <iframe
-              title={`${t.pharmacy.map}: ${p.address}`}
-              className="aspect-[4/3] w-full rounded-[var(--radius-2xl)] border border-line"
-              loading="lazy"
-              referrerPolicy="no-referrer"
-              src={`https://www.openstreetmap.org/export/embed.html?bbox=${p.longitude! - 0.006},${p.latitude! - 0.004},${p.longitude! + 0.006},${p.latitude! + 0.004}&layer=mapnik&marker=${p.latitude},${p.longitude}`}
+            <PharmacyMap
+              locate={false}
+              openFirst
+              selectedId={selected?.id ?? null}
+              pharmacies={[{ id: p.id, address: p.address, city: p.city, phones: p.phones, lat: p.latitude!, lng: p.longitude!, href: localizedPath(locale, `/pharmacies/${p.slug}`) }]}
             />
           ) : (
             <div className="flex aspect-[4/3] w-full flex-col items-center justify-center gap-3 rounded-[var(--radius-2xl)] border border-dashed border-line-strong bg-surface p-6 text-center text-muted">

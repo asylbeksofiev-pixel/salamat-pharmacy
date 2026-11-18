@@ -8,7 +8,7 @@ const imageHosts = (process.env.IMAGE_HOSTS ?? "")
   .filter(Boolean);
 
 // Content Security Policy for production. Next.js injects inline bootstrap scripts, hence 'unsafe-inline';
-// no third-party scripts are loaded. Maps open in external apps; the OSM embed is the only frame source.
+// no third-party scripts are loaded. The pharmacy map (Leaflet, bundled) loads OpenStreetMap tiles as images.
 const csp = [
   "default-src 'self'",
   "script-src 'self' 'unsafe-inline'",
@@ -16,7 +16,7 @@ const csp = [
   "img-src 'self' data: blob: https:",
   "font-src 'self' data:",
   "connect-src 'self'",
-  "frame-src https://www.openstreetmap.org",
+  "frame-src 'none'",
   "frame-ancestors 'self'",
   "base-uri 'self'",
   "form-action 'self'",

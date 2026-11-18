@@ -13,6 +13,7 @@ import { getStorefrontState } from "@/server/storefront";
 import { CatalogSearchForm } from "@/components/catalog/CatalogItems";
 import { pageMetadata } from "@/server/seo";
 import { SearchBox } from "@/components/site/SearchBox";
+import { HeroStats } from "@/components/site/HeroStats";
 import { CategoryTile, PharmacyCard, PromotionCard } from "@/components/catalog/Tiles";
 import { ProductGrid } from "@/components/catalog/ProductCard";
 import { ButtonLink } from "@/components/ui/Button";
@@ -79,23 +80,15 @@ export default async function HomePage({ params }: PageProps<"/[locale]">) {
                 {t.common.catalog}
               </ButtonLink>
             </div>
-            <dl className="mt-2 grid max-w-xl grid-cols-3 gap-3">
-              <div className="rounded-[var(--radius-lg)] bg-white p-3 shadow-[var(--shadow-card)]">
-                <dt className="sr-only">{t.common.pharmacies}</dt>
-                <dd className="text-2xl font-extrabold text-brand-700">{pharmacies.length}</dd>
-                <dd className="text-xs leading-tight text-muted">{t.home.heroPoints}</dd>
-              </div>
-              <div className="rounded-[var(--radius-lg)] bg-white p-3 shadow-[var(--shadow-card)]">
-                <dt className="sr-only">{t.common.about}</dt>
-                <dd className="text-2xl font-extrabold text-brand-700">{settings.company.foundedYear}</dd>
-                <dd className="text-xs leading-tight text-muted">{t.home.heroSince}</dd>
-              </div>
-              <div className="rounded-[var(--radius-lg)] bg-white p-3 shadow-[var(--shadow-card)]">
-                <dt className="sr-only">GPP</dt>
-                <dd className="text-2xl font-extrabold text-brand-700">GPP</dd>
-                <dd className="text-xs leading-tight text-muted">{t.home.heroGpp}</dd>
-              </div>
-            </dl>
+            <HeroStats
+              className="mt-2 max-w-xl"
+              locale={numberLocale}
+              stats={[
+                { term: t.common.pharmacies, value: pharmacies.length, caption: t.home.heroPoints },
+                { term: t.common.about, value: settings.company.foundedYear, from: settings.company.foundedYear - 20, grouping: false, caption: t.home.heroSince },
+                { term: "GPP", value: "GPP", caption: t.home.heroGpp },
+              ]}
+            />
           </div>
           <div className="relative hidden aspect-square w-full max-w-[34rem] justify-self-center lg:block" aria-hidden="true">
             <div className="absolute inset-[4%] rounded-full bg-brand-100/70" />

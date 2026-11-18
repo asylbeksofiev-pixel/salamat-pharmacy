@@ -1,11 +1,37 @@
 // Reference data taken from https://salamatfarmacia.kz/ on 14.11.2026 (docs/source-audit.md).
 // No products, prices or stock here: those come only from SALAMAT's files or API.
 
+import branches from "./data/branches.json";
+
 export const OFFICIAL_SOURCE = {
   code: "salamatfarmacia-kz",
   name: "Официальный сайт salamatfarmacia.kz (проверено 14.11.2026)",
   url: "https://salamatfarmacia.kz/",
 };
+
+/** Branch list supplied by the network (prisma/data/branches.json, 18.11.2026): addresses, phones, coordinates. */
+export interface BranchRecord {
+  id: number;
+  address: string;
+  phone: string;
+  lat: number;
+  lng: number;
+}
+export const BRANCHES: BranchRecord[] = branches;
+
+/** Numbers in branches.json that are placeholders, not real phones: never stored or shown. */
+export const PLACEHOLDER_PHONES = ["+77000000000"];
+
+export const BRANCHES_SOURCE = {
+  code: "salamat-branches-2026-11",
+  name: "Список филиалов от сети SALAMAT (18.11.2026)",
+  verifiedAt: "2026-11-18T12:00:00Z",
+};
+
+export const CITIES: { slug: string; nameRu: string; nameKk: string; sortOrder: number }[] = [
+  { slug: "astana", nameRu: "Астана", nameKk: "Астана", sortOrder: 0 },
+  { slug: "arshaly-district", nameRu: "Аршалынский район, Акмолинская область", nameKk: "Ақмола облысы, Аршалы ауданы", sortOrder: 10 },
+];
 
 export const PHARMACIES: {
   code: string;
@@ -14,27 +40,76 @@ export const PHARMACIES: {
   sourceAddress: string;
   phones: string[];
   internalNote?: string;
+  /** id in branches.json: coordinates (and phone) come from there. */
+  branchId?: number;
+  city?: string;
+  /** Closed branches stay in the database (order history) but are hidden everywhere on the site. */
+  isActive?: boolean;
+  /** Branches added from the network's own list are confirmed by it. */
+  fromBranchList?: boolean;
 }[] = [
-  { code: "SAL-01", slug: "asfendiyarova-3", addressRu: "ул. С. Асфендиярова, д. 3, н.п. 32", sourceAddress: "ул. С. Асфендиярова, д. 3,. н. п. 32", phones: ["+77026313485"] },
-  { code: "SAL-02", slug: "mailina-14", addressRu: "ул. Б. Майлина, д. 14, н.п. 6", sourceAddress: "ул. Б. Майлина, д. 14, н.п. 6", phones: ["+77783015777"] },
-  { code: "SAL-03", slug: "uly-dala-71", addressRu: "ул. Улы Дала, д. 71, н.п. 12", sourceAddress: "ул. Улы Дала, д. 71, н.п 12", phones: ["+77476513816", "+77782859766"] },
-  { code: "SAL-04", slug: "mukhamedkhanova-17", addressRu: "ул. К. Мухамедханова, д. 17, н.п. 3", sourceAddress: "ул. К. Мухамедханова, д. 17, н.п.. 3", phones: ["+77019955190"] },
-  { code: "SAL-05", slug: "mangilik-el-59", addressRu: "пр. Мәңгілік Ел, д. 59, н.п. 8", sourceAddress: "пр. Мәңгілік Ел, д. 59, н.п. 8", phones: ["+77055501572"] },
-  { code: "SAL-06", slug: "mangilik-el-36", addressRu: "пр. Мәңгілік Ел, д. 36, н.п. 8", sourceAddress: "пр. Мәңгілік Ел, д. 36, н.п. 8", phones: ["+77022530485"] },
-  { code: "SAL-07", slug: "mangilik-el-49", addressRu: "пр. Мәңгілік Ел, д. 49, н.п. 1", sourceAddress: "пр. Мәңгілік Ел, д. 49, н.п 1", phones: ["+77025314485"] },
-  { code: "SAL-08", slug: "mangilik-el-52", addressRu: "пр. Мәңгілік Ел, д. 52, н.п. 27", sourceAddress: "пр. Мәңгілік Ел, д. 52, н.п. 27", phones: ["+77750695104"] },
-  { code: "SAL-09", slug: "mangilik-el-21", addressRu: "пр. Мәңгілік Ел, д. 21, н.п. 7", sourceAddress: "пр. Мәңгілік Ел, д. 21, н.п. 7", phones: ["+77022590126"] },
-  { code: "SAL-10", slug: "abylai-khana-32", addressRu: "пр. Абылай хана, д. 32", sourceAddress: "пр. Абылай хана, д. 32", phones: ["+77020077175"] },
-  { code: "SAL-11", slug: "koshkarbaeva-56", addressRu: "пр. Р. Кошкарбаева, д. 56, н.п. 3", sourceAddress: "пр. Р. Кошкарбаева, д. 56, н.п. 3", phones: ["+77029104095"] },
-  { code: "SAL-12", slug: "sauran-5", addressRu: "ул. Сауран, д. 5, н.п. 4", sourceAddress: "Сауран, д. 5, н.п. 4", phones: ["+77783014777"], internalNote: "На сайте тип улицы не указан — уточнить" },
-  { code: "SAL-13", slug: "saraishyk-7", addressRu: "ул. Сарайшык, д. 7, н.п. 17", sourceAddress: "ул. Сарайшык, д. 7, н.п.. 17", phones: ["+77786038047"] },
+  { code: "SAL-01", slug: "asfendiyarova-3", addressRu: "ул. С. Асфендиярова, д. 3, н.п. 32", sourceAddress: "ул. С. Асфендиярова, д. 3,. н. п. 32", phones: ["+77026313485"], branchId: 10 },
+  { code: "SAL-02", slug: "mailina-14", addressRu: "ул. Б. Майлина, д. 14, н.п. 6", sourceAddress: "ул. Б. Майлина, д. 14, н.п. 6", phones: ["+77783015777"], branchId: 9 },
+  { code: "SAL-03", slug: "uly-dala-71", addressRu: "ул. Улы Дала, д. 71, н.п. 12", sourceAddress: "ул. Улы Дала, д. 71, н.п 12", phones: ["+77476513816", "+77782859766"], branchId: 11 },
+  { code: "SAL-04", slug: "mukhamedkhanova-17", addressRu: "ул. К. Мухамедханова, д. 17, н.п. 3", sourceAddress: "ул. К. Мухамедханова, д. 17, н.п.. 3", phones: ["+77019955190"], branchId: 6 },
+  { code: "SAL-05", slug: "mangilik-el-59", addressRu: "пр. Мәңгілік Ел, д. 59, н.п. 8", sourceAddress: "пр. Мәңгілік Ел, д. 59, н.п. 8", phones: ["+77055501572"], branchId: 2 },
+  { code: "SAL-06", slug: "mangilik-el-36", addressRu: "пр. Мәңгілік Ел, д. 36, н.п. 8", sourceAddress: "пр. Мәңгілік Ел, д. 36, н.п. 8", phones: ["+77022530485"], isActive: false, internalNote: "Филиал закрыт (18.11.2026)" },
+  {
+    code: "SAL-07",
+    slug: "mangilik-el-49",
+    addressRu: "пр. Мәңгілік Ел, д. 49, н.п. 1",
+    sourceAddress: "пр. Мәңгілік Ел, д. 49, н.п 1",
+    phones: [],
+    isActive: false,
+    internalNote: "Филиал закрыт (18.11.2026); номер +77025314485 перенесён на пр. Мәңгілік Ел, д. 24 (SAL-15)",
+  },
+  { code: "SAL-08", slug: "mangilik-el-52", addressRu: "пр. Мәңгілік Ел, д. 52, н.п. 27", sourceAddress: "пр. Мәңгілік Ел, д. 52, н.п. 27", phones: ["+77750695104"], branchId: 1 },
+  { code: "SAL-09", slug: "mangilik-el-21", addressRu: "пр. Мәңгілік Ел, д. 21, н.п. 7", sourceAddress: "пр. Мәңгілік Ел, д. 21, н.п. 7", phones: ["+77022590126"], branchId: 14 },
+  { code: "SAL-10", slug: "abylai-khana-32", addressRu: "пр. Абылай хана, д. 32", sourceAddress: "пр. Абылай хана, д. 32", phones: ["+77020077175"], branchId: 4 },
+  { code: "SAL-11", slug: "koshkarbaeva-56", addressRu: "пр. Р. Кошкарбаева, д. 56, н.п. 3", sourceAddress: "пр. Р. Кошкарбаева, д. 56, н.п. 3", phones: ["+77029104095"], branchId: 5 },
+  { code: "SAL-12", slug: "sauran-5", addressRu: "ул. Сауран, д. 5, н.п. 4", sourceAddress: "Сауран, д. 5, н.п. 4", phones: ["+77783014777"], internalNote: "На сайте тип улицы не указан — уточнить", branchId: 8 },
+  { code: "SAL-13", slug: "saraishyk-7", addressRu: "ул. Сарайшык, д. 7, н.п. 17", sourceAddress: "ул. Сарайшык, д. 7, н.п.. 17", phones: ["+77786038047"], branchId: 7 },
   {
     code: "SAL-14",
     slug: "ilyinka-isatai-batyra-38",
     addressRu: "с. Ильинка, ул. Исатай батыра, д. 38",
     sourceAddress: "село Ильинка. Ул. Исатай батыра, д. 38",
-    phones: ["+77024827757", "+77755013466"],
-    internalNote: "В источнике в списке «города Астаны», но это село Ильинка — уточнить населённый пункт",
+    // +77755013466 belongs to ул. Есет батыра, д. 11 (Ильинка 2) according to branches.json.
+    phones: ["+77024827757"],
+    internalNote: "В источнике в списке «города Астаны», но это село Ильинка — уточнить населённый пункт. В списке сети 18.11.2026: «Астана, Уркер, улица Исатая Тайманова, 38»",
+    branchId: 12,
+  },
+  {
+    code: "SAL-15",
+    slug: "mangilik-el-24",
+    addressRu: "пр. Мәңгілік Ел, д. 24",
+    sourceAddress: "г. Астана, пр. Мәңгілік Ел, 24",
+    phones: ["+77025314485"],
+    branchId: 13,
+    fromBranchList: true,
+    internalNote: "Номер +77025314485 перенесён с закрытого филиала SAL-07",
+  },
+  { code: "SAL-16", slug: "nazhimedenova-13", addressRu: "ул. Ж. Нажимеденова, д. 13", sourceAddress: "г. Астана, ул. Нажимеденова, 13", phones: ["+77080360167"], branchId: 3, fromBranchList: true },
+  { code: "SAL-17", slug: "eset-batyra-11", addressRu: "ул. Есет батыра, д. 11 (Ильинка 2)", sourceAddress: "г. Астана, ул. Есет Батыра, 11 (Ильинка 2)", phones: ["+77755013466"], branchId: 15, fromBranchList: true },
+  {
+    code: "SAL-18",
+    slug: "zhibek-zholy-kurmanova-8-3",
+    addressRu: "с. Жибек Жолы, ул. Курманова, д. 8/3",
+    sourceAddress: "с. Жибек Жолы, ул. Курманова, 8/3 (Аршалынский район, Акмолинская область)",
+    phones: ["+77750054291"],
+    city: "arshaly-district",
+    branchId: 16,
+    fromBranchList: true,
+  },
+  {
+    code: "SAL-19",
+    slug: "turan-55",
+    addressRu: "пр. Туран, д. 55, н.п. 8",
+    sourceAddress: "г. Астана, пр. Туран, 55, н.п. 8",
+    phones: [],
+    branchId: 17,
+    fromBranchList: true,
+    internalNote: "В списке сети телефон-заглушка +7 700 000 00 00 — настоящий номер не указан, на сайте телефон не показывается",
   },
 ];
 

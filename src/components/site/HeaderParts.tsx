@@ -285,19 +285,49 @@ export function MobileBottomNav() {
       ? [{ href: "/cart", label: t.common.cart, icon: "cart" as const, match: (p: string) => p.startsWith("/cart") || p.startsWith("/checkout"), badge: hydrated ? count : 0 }]
       : []),
   ];
+  const activeIndex = items.findIndex((it) => it.match(path));
+  // The tapped item lights up at once (before the page arrives); the bounce plays when the section changes,
+  // including Back/Forward, but not on the first load or when the active item is tapped again.
+  const [nav, setNav] = useState({ shown: activeIndex, tapped: null as number | null, pulse: 0 });
+  if (activeIndex !== nav.shown) {
+    setNav((s) => ({ shown: activeIndex, tapped: null, pulse: s.tapped === activeIndex ? s.pulse : s.pulse + 1 }));
+  }
+  const lit = nav.tapped ?? activeIndex;
   return (
     <nav aria-label={t.common.menu} style={{ viewTransitionName: "bottom-nav" }} className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden" lang={locale}>
       <ul className={cn("grid", items.length === 5 ? "grid-cols-5" : "grid-cols-4")}>
-        {items.map((it) => {
-          const active = it.match(path);
+        {items.map((it, i) => {
+          const active = i === activeIndex;
+          const on = i === lit;
           return (
             <li key={it.href}>
-              <Link href={href(it.href)} aria-current={active ? "page" : undefined} className={cn("flex flex-col items-center gap-0.5 py-2 text-[0.68rem] font-medium", active ? "text-brand-700" : "text-muted")}>
-                <span className="relative">
-                  <Icon name={it.icon} size={22} />
-                  {it.badge ? <span className="absolute -top-1.5 -right-2.5 grid min-w-4.5 place-items-center rounded-full bg-accent-500 px-1 text-[0.62rem] leading-[1.125rem] font-bold text-white" aria-hidden="true">{it.badge}</span> : null}
+              <Link
+                href={href(it.href)}
+                aria-current={active ? "page" : undefined}
+                onClick={(e) => {
+                  if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+                  if (i !== lit) setNav((s) => ({ ...s, tapped: i, pulse: s.pulse + 1 }));
+                }}
+                className={cn(
+                  "group flex touch-manipulation flex-col items-center gap-0.5 rounded-[var(--radius-md)] pt-1.5 pb-2 text-[0.68rem] font-medium transition-colors duration-200 select-none [-webkit-tap-highlight-color:transparent]",
+                  "focus-visible:outline-3 focus-visible:-outline-offset-3 focus-visible:outline-brand-600",
+                  on ? "text-brand-700" : "text-muted",
+                )}
+              >
+                <span
+                  key={on ? `on-${nav.pulse}` : "off"}
+                  className={cn(
+                    "relative grid h-7 w-12 place-items-center rounded-full transition-[background-color,transform] duration-200 group-active:scale-90",
+                    on && "bg-brand-50",
+                    on && nav.pulse > 0 && "sal-nav-pill",
+                  )}
+                >
+                  <span className={cn("grid place-items-center", on && nav.pulse > 0 && "sal-nav-bounce")}>
+                    <Icon name={it.icon} size={22} />
+                  </span>
+                  {it.badge ? <span className="absolute -top-1 right-1 grid min-w-4.5 place-items-center rounded-full bg-accent-500 px-1 text-[0.62rem] leading-[1.125rem] font-bold text-white" aria-hidden="true">{it.badge}</span> : null}
                 </span>
-                <span className="max-w-full truncate px-0.5">{it.label}</span>
+                <span className={cn("max-w-full truncate px-0.5", on && "font-semibold")}>{it.label}</span>
               </Link>
             </li>
           );

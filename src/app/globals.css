@@ -204,6 +204,260 @@ dialog.sal-drawer-bottom[data-closing] {
   transform: scale(0.97);
 }
 
+/* Reveal on first scroll into view (HeroStats.tsx). Hidden only when JS runs (html.js, set in the layout head);
+   a late fallback shows the content even if the script never starts. */
+.sal-reveal,
+.sal-reveal-text {
+  transition:
+    opacity 420ms var(--ease-out-soft),
+    transform 420ms var(--ease-out-soft),
+    letter-spacing 520ms var(--ease-out-soft);
+}
+.js .sal-reveal:not(.is-visible) {
+  opacity: 0;
+  transform: translateY(10px);
+  animation: sal-reveal-fallback 1ms linear 4s forwards;
+}
+.js .sal-reveal-text:not(.is-visible) {
+  opacity: 0;
+  letter-spacing: 0.35em;
+  animation: sal-reveal-text-fallback 1ms linear 4s forwards;
+}
+@keyframes sal-reveal-text-fallback {
+  to {
+    opacity: 1;
+    letter-spacing: normal;
+  }
+}
+@keyframes sal-reveal-fallback {
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Mobile bottom navigation: the active item's pill grows in and its icon gives a small hop (HeaderParts.tsx) */
+.sal-nav-pill {
+  animation: sal-nav-pill 260ms var(--ease-out-soft) both;
+}
+.sal-nav-bounce {
+  animation: sal-nav-bounce 360ms var(--ease-out-soft) both;
+}
+@keyframes sal-nav-pill {
+  from {
+    background-color: transparent;
+    transform: scaleX(0.55);
+  }
+}
+@keyframes sal-nav-bounce {
+  0% {
+    transform: translateY(0) scale(1);
+  }
+  40% {
+    transform: translateY(-3px) scale(1.12);
+  }
+  100% {
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Favourite button: pop + burst when adding, soft shrink when removing (OfferActions.tsx) */
+.sal-fav {
+  -webkit-tap-highlight-color: transparent;
+}
+.sal-fav-pop {
+  animation: sal-heart-pop 380ms var(--ease-out-soft) both;
+}
+.sal-fav-out {
+  animation: sal-heart-out 260ms ease-out both;
+}
+.sal-fav-burst {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.sal-fav-burst::before {
+  content: "";
+  position: absolute;
+  inset: 22%;
+  border-radius: 9999px;
+  border: 2px solid var(--color-accent-500);
+  animation: sal-fav-ring 420ms ease-out both;
+}
+.sal-fav-burst::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 4px;
+  height: 4px;
+  margin: -2px 0 0 -2px;
+  border-radius: 9999px;
+  box-shadow:
+    0 -13px 0 var(--color-accent-500),
+    11px -6.5px 0 #f59e0b,
+    11px 6.5px 0 var(--color-accent-500),
+    0 13px 0 var(--color-brand-600),
+    -11px 6.5px 0 var(--color-accent-500),
+    -11px -6.5px 0 #f59e0b;
+  animation: sal-fav-particles 460ms ease-out both;
+}
+@keyframes sal-heart-pop {
+  0% {
+    transform: scale(1);
+  }
+  35% {
+    transform: scale(1.32);
+  }
+  65% {
+    transform: scale(0.92);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+@keyframes sal-heart-out {
+  0% {
+    transform: scale(1);
+  }
+  45% {
+    transform: scale(0.72);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+@keyframes sal-fav-ring {
+  from {
+    transform: scale(0.5);
+    opacity: 0.7;
+  }
+  to {
+    transform: scale(1.7);
+    opacity: 0;
+  }
+}
+@keyframes sal-fav-particles {
+  0% {
+    transform: scale(0.3);
+    opacity: 1;
+  }
+  70% {
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1.55);
+    opacity: 0;
+  }
+}
+
+/* Pharmacy map (Leaflet) */
+.sal-map.leaflet-container {
+  font: inherit;
+  background: var(--color-surface);
+}
+.sal-map .leaflet-control-attribution {
+  font-size: 0.68rem;
+}
+.sal-map .leaflet-bar a {
+  width: 36px;
+  height: 36px;
+  line-height: 36px;
+}
+.sal-pin {
+  color: var(--color-brand-600);
+  filter: drop-shadow(0 2px 3px rgb(0 0 0 / 0.25));
+  transition: color 160ms ease;
+}
+.sal-pin svg {
+  display: block;
+  transform-origin: 50% 100%;
+  transition: transform 160ms var(--ease-out-soft);
+}
+.sal-pin:hover svg,
+.sal-pin:focus-visible svg {
+  transform: scale(1.12);
+}
+.sal-pin:focus-visible {
+  outline: 3px solid var(--color-brand-600);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+.sal-pin--selected {
+  color: var(--color-brand-800);
+}
+.sal-pin--nearest {
+  color: var(--color-accent-500);
+}
+.sal-pin--nearest svg {
+  transform: scale(1.15);
+}
+.sal-me-dot {
+  position: relative;
+  display: block;
+  width: 22px;
+  height: 22px;
+  border-radius: 9999px;
+  background: #2563eb;
+  border: 3px solid #fff;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.35);
+}
+.sal-me-dot::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border-radius: inherit;
+  border: 2px solid #3b82f6;
+  animation: sal-me-pulse 1.8s ease-out infinite;
+}
+.sal-me-label.leaflet-tooltip {
+  border: 0;
+  border-radius: 9999px;
+  padding: 2px 10px;
+  background: #1d4ed8;
+  color: #fff;
+  font-weight: 600;
+  font-size: 0.75rem;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.25);
+}
+.sal-me-label.leaflet-tooltip-top::before {
+  border-top-color: #1d4ed8;
+}
+.sal-map .leaflet-popup-content-wrapper {
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-pop);
+}
+.sal-map .leaflet-popup-content {
+  margin: 14px 16px;
+  font-size: inherit;
+  line-height: inherit;
+}
+.sal-map .leaflet-popup-content p {
+  margin: 0;
+}
+.sal-map .sal-popup a {
+  color: var(--color-brand-700);
+}
+.sal-map .sal-popup a[href^="tel:"] {
+  color: var(--color-ink);
+}
+.sal-map a.leaflet-popup-close-button {
+  width: 32px;
+  height: 32px;
+  font-size: 20px;
+  line-height: 30px;
+}
+@keyframes sal-me-pulse {
+  from {
+    transform: scale(1);
+    opacity: 0.9;
+  }
+  to {
+    transform: scale(2.4);
+    opacity: 0;
+  }
+}
+
 /* Accordions (<details>): smooth height where the browser supports it */
 :root {
   interpolate-size: allow-keywords;
@@ -301,6 +555,18 @@ details[open]::details-content {
   }
   .press:active {
     transform: none;
+  }
+  .js .sal-reveal:not(.is-visible),
+  .js .sal-reveal-text:not(.is-visible) {
+    opacity: 1;
+    transform: none;
+    letter-spacing: normal;
+    animation: none;
+  }
+  .sal-me-dot::after,
+  .sal-fav-burst {
+    animation: none;
+    display: none;
   }
   ::view-transition-group(*),
   ::view-transition-old(*),

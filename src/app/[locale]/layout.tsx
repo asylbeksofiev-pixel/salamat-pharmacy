@@ -81,7 +81,11 @@ export default async function LocaleLayout({ children, params }: LayoutProps<"/[
   const cityName = city ? (locale === "kk" ? (city.nameKk ?? city.nameRu) : city.nameRu) : t.header.cityAstana;
 
   return (
-    <html lang={localeTags[locale]} className="h-full" data-scroll-behavior="smooth">
+    <html lang={localeTags[locale]} className="h-full" data-scroll-behavior="smooth" suppressHydrationWarning>
+      <head>
+        {/* Marks that JavaScript runs, before the first paint: scroll-in effects start hidden only then (no flash, no-JS shows everything). */}
+        <script dangerouslySetInnerHTML={{ __html: 'document.documentElement.classList.add("js")' }} />
+      </head>
       <body className="flex min-h-full flex-col">
         <a href="#main" className="sr-only z-[100] rounded-md bg-brand-700 px-4 py-2 font-semibold text-white focus:not-sr-only focus:fixed focus:top-2 focus:left-2">
           {t.common.skipToContent}

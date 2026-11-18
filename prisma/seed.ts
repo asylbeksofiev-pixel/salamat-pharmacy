@@ -1,7 +1,7 @@
 // Production-safe seed: reference data only (roles, official source, branches, categories, pages, FAQ, settings).
 // Idempotent: existing records edited in the admin panel are not overwritten (create-only upserts).
 import { PrismaClient } from "@prisma/client";
-import { CATEGORIES, FAQ, OFFICIAL_SOURCE, PAGES, PHARMACIES, ROLES } from "./seed-data";
+import { BRANCHES, BRANCHES_SOURCE, CATEGORIES, CITIES, FAQ, OFFICIAL_SOURCE, PAGES, PHARMACIES, ROLES } from "./seed-data";
 import { hashPassword, passwordProblems } from "../src/server/auth/password";
 import { DEFAULT_SETTINGS } from "../src/server/settings-defaults";
 
@@ -23,26 +23,38 @@ async function main() {
     update: {},
   });
 
-  const astana = await prisma.city.upsert({
-    where: { slug: "astana" },
-    create: { slug: "astana", nameRu: "Астана", nameKk: "Астана", sortOrder: 0 },
+  const branchSource = await prisma.dataSource.upsert({
+    where: { code: BRANCHES_SOURCE.code },
+    create: { code: BRANCHES_SOURCE.code, name: BRANCHES_SOURCE.name, kind: "MANUAL", verifiedAt: new Date(BRANCHES_SOURCE.verifiedAt), notes: "prisma/data/branches.json" },
     update: {},
   });
 
+  const cityIds = new Map<string, string>();
+  for (const c of CITIES) {
+    const city = await prisma.city.upsert({ where: { slug: c.slug }, create: c, update: {} });
+    cityIds.set(c.slug, city.id);
+  }
+
   for (const [i, p] of PHARMACIES.entries()) {
+    const branch = p.branchId ? BRANCHES.find((b) => b.id === p.branchId) : undefined;
+    if (p.branchId && !branch) throw new Error(`branches.json has no id ${p.branchId} (${p.code})`);
     await prisma.pharmacy.upsert({
       where: { code: p.code },
       create: {
         code: p.code,
         slug: p.slug,
-        cityId: astana.id,
+        cityId: cityIds.get(p.city ?? "astana")!,
         addressRu: p.addressRu,
         sourceAddress: p.sourceAddress,
         phones: p.phones,
+        latitude: branch?.lat ?? null,
+        longitude: branch?.lng ?? null,
+        isActive: p.isActive ?? true,
+        acceptsOrders: p.isActive ?? true,
         sortOrder: i + 1,
-        sourceId: source.id,
-        internalNote: p.internalNote ?? "Адрес и телефон с salamatfarmacia.kz — подтвердить; часы работы и координаты не указаны",
-        verifiedAt: null,
+        sourceId: p.fromBranchList ? branchSource.id : source.id,
+        internalNote: p.internalNote ?? (p.fromBranchList ? null : "Адрес и телефон с salamatfarmacia.kz — подтвердить; часы работы не указаны"),
+        verifiedAt: p.fromBranchList ? new Date(BRANCHES_SOURCE.verifiedAt) : null,
       },
       update: {},
     });
