@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getDictionary, isLocale, localizedPath } from "@/lib/i18n";
+import { getDictionary, isLocale, localizedPath, pickLocalized } from "@/lib/i18n";
 import { formatPhone, telHref } from "@/lib/format";
 import { getPage } from "@/server/content";
 import { getPharmacies } from "@/server/pharmacies";
@@ -36,12 +36,12 @@ export default async function ContactsPage({ params }: PageProps<"/[locale]/cont
               <Icon name="phone" />
               {formatPhone(settings.helpline.phone)}
             </a>
-            {settings.helpline.hoursRu ? <p className="mt-1 text-sm text-ink-soft">{locale === "kk" ? (settings.helpline.hoursKk ?? settings.helpline.hoursRu) : settings.helpline.hoursRu}</p> : null}
+            {settings.helpline.hoursRu ? <p className="mt-1 text-sm text-ink-soft">{pickLocalized(locale, settings.helpline.hoursRu, settings.helpline.hoursKk)}</p> : null}
           </section>
           <section className="rounded-[var(--radius-xl)] border border-line p-5 text-sm">
             <h2 className="mb-2 font-semibold">{t.pages.contactsCompany}</h2>
             <p className="font-medium">{c.legalName}</p>
-            <p className="text-muted">{locale === "kk" ? "БСН" : "БИН"} {c.bin.replace(/(\d{3})(?=\d)/g, "$1 ")}</p>
+            <p className="text-muted">{t.footer.binLabel} {c.bin.replace(/(\d{3})(?=\d)/g, "$1 ")}</p>
             <p className="mt-1 text-muted">{c.legalAddress}</p>
             {c.email ? <p className="mt-1"><a className="text-brand-700 hover:underline" href={`mailto:${c.email}`}>{c.email}</a></p> : null}
           </section>

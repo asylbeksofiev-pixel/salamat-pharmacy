@@ -31,7 +31,7 @@ export default async function OrderPage({ params }: PageProps<"/admin/orders/[id
   const next = ORDER_TRANSITIONS[order.status];
   return (
     <div>
-      <PageHeader title={`Заявка ${order.publicId}`} description={`Создана ${formatDateTime(order.createdAt)} · ${order.locale === "kk" ? "казахская версия сайта" : "русская версия сайта"}`} actions={<StatusPill status={order.status} label={ORDER_STATUS_LABELS_RU[order.status]} />} />
+      <PageHeader title={`Заявка ${order.publicId}`} description={`Создана ${formatDateTime(order.createdAt)} · ${order.locale === "kk" ? "казахская версия сайта" : order.locale === "en" ? "английская версия сайта" : "русская версия сайта"}`} actions={<StatusPill status={order.status} label={ORDER_STATUS_LABELS_RU[order.status]} />} />
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_24rem]">
         <div className="flex flex-col gap-5">
           {order.status === "NEW" ? <Notice tone="warning">Новая заявка: проверьте наличие и цену в аптеке и позвоните покупателю. До подтверждения покупатель видит «Заявка отправлена, оператор подтвердит детали».</Notice> : null}

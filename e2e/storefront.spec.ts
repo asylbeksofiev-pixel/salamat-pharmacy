@@ -293,7 +293,11 @@ test("request 'to be confirmed': catalogue product → cart → checkout → sav
   // Home: no search inside the hero, catalogue preview with real cards and a way into the catalogue.
   await expect(page.locator("section").first().getByRole("search")).toHaveCount(0);
   const catalog = page.getByRole("region", { name: "Каталог товаров" });
-  await expect(catalog.locator("article")).toHaveCount(4);
+  // Carousel: up to 12 real products in a stable order; "next" scrolls, "previous" is disabled at the start.
+  await expect(catalog.locator("article")).toHaveCount(12);
+  await expect(catalog.getByRole("button", { name: "Предыдущие товары" })).toBeDisabled();
+  await catalog.getByRole("button", { name: "Следующие товары" }).click();
+  await expect(catalog.getByRole("button", { name: "Предыдущие товары" })).toBeEnabled();
   await expect(catalog.getByRole("link", { name: "Смотреть все товары" })).toHaveAttribute("href", "/catalog");
   await selectPharmacy(page, /Асфендиярова/);
   await page.goto("/catalog?q=ASP-100");
@@ -326,4 +330,31 @@ test("request 'to be confirmed': catalogue product → cart → checkout → sav
   await expect(admin.locator("main")).toContainText("Артикул: ASP-100");
   await expect(admin.locator("main")).toContainText("Заявка на уточнение");
   await ctx.close();
+});
+
+test("English version: /en routes, switcher keeps the page and query, no Russian interface text", async ({ page }) => {
+  await page.goto("/catalog?q=DUP-001");
+  await page.getByRole("group", { name: "Язык" }).getByRole("link", { name: /English/ }).click();
+  await expect(page).toHaveURL(/\/en\/catalog\?q=DUP-001$/);
+  await expect(page.locator("html")).toHaveAttribute("lang", "en");
+  const main = page.locator("main");
+  await expect(main).toContainText("Products found: 2");
+  await expect(main.locator("article").first()).toContainText("Price to be confirmed");
+  await expect(main.getByRole("button", { name: "Add to cart" })).toHaveCount(2);
+  await expect(page.locator("header")).toContainText("Pharmacies");
+  await expect(page.locator("header")).not.toContainText("Аптеки");
+  // Product names stay in the original language and are marked as Russian for screen readers.
+  await expect(main.locator("article h3").first()).toHaveAttribute("lang", "ru");
+  for (const path of ["/en", "/en/cart", "/en/pharmacies", "/en/help"]) {
+    await page.goto(path);
+    await expect(page.locator("html")).toHaveAttribute("lang", "en");
+    await expect(page.locator("header")).not.toContainText(/Корзина|Каталог|Справочная/);
+    await expect(page.locator("footer")).toContainText("All rights reserved.");
+  }
+  // hreflang alternates list all three languages.
+  await page.goto("/en/pharmacies");
+  await expect(page.locator('link[rel="alternate"][hreflang="en"]')).toHaveAttribute("href", /\/en\/pharmacies$/);
+  await expect(page.locator('link[rel="alternate"][hreflang="kk-KZ"]')).toHaveAttribute("href", /\/kk\/pharmacies$/);
+  await page.goto("/");
+  await expect(page).toHaveURL(/\/en$/); // remembered choice
 });

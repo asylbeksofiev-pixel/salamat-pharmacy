@@ -13,6 +13,7 @@ import { SelectPharmacyButton } from "../catalog/SelectPharmacyButton";
 import { Icon } from "../icons";
 import { cn } from "../ui/cn";
 import { formatPhone, telHref } from "@/lib/format";
+import { localeTags } from "@/lib/i18n/config";
 import { formatDistance, nearest, type LatLng } from "@/lib/geo";
 
 export interface MapPharmacy {
@@ -83,7 +84,7 @@ export function PharmacyMap({
   // Bumped each time a map instance is created (e.g. after filtering the list), so overlays are redrawn on it.
   const [mapVersion, setMapVersion] = useState(0);
   const [geo, setGeo] = useState<GeoState>({ state: "idle" });
-  const numberLocale = locale === "kk" ? "kk-KZ" : "ru-KZ";
+  const numberLocale = localeTags[locale];
   const dist = useCallback((km: number) => formatDistance(km, { m: t.pharmacy.meters, km: t.pharmacy.kilometers }, numberLocale), [t, numberLocale]);
   // Re-create the map only when the set of pharmacies really changes.
   const dataKey = pharmacies.map((p) => `${p.id}:${p.lat},${p.lng}`).join("|");

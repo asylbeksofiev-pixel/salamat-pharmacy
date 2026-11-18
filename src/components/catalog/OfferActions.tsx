@@ -5,6 +5,7 @@ import type { Offer } from "@/lib/offer";
 import { fmt } from "@/lib/i18n/config";
 import { formatPhone, telHref } from "@/lib/format";
 import { cartStore, favoritesStore, useCart, useFavorites, useHydrated } from "@/lib/client/stores";
+import { flyToCart } from "@/lib/client/fly-to-cart";
 import { Button, buttonClass } from "../ui/Button";
 import { Modal } from "../ui/Dialog";
 import { useToast } from "../ui/Toast";
@@ -85,6 +86,7 @@ export function CatalogCartButton({ id, name, size = "md", className }: { id: st
   const hydrated = useHydrated();
   const cart = useCart();
   const [added, setAdded] = useState(0);
+  const addedAt = useRef(0);
   const linkRef = useRef<HTMLAnchorElement>(null);
   const inCart = hydrated && cart.some((l) => l.variantId === id);
   useEffect(() => {
@@ -94,7 +96,15 @@ export function CatalogCartButton({ id, name, size = "md", className }: { id: st
   const cls = cn("w-full gap-1.5 px-2.5", size === "md" && "text-sm sm:text-[0.95rem]", className);
   if (inCart) {
     return (
-      <Link ref={linkRef} href={href("/cart")} className={buttonClass("secondary", size, cls)}>
+      <Link
+        ref={linkRef}
+        href={href("/cart")}
+        className={buttonClass("secondary", size, cls)}
+        // The second tap of a quick double-tap lands here: it must not take the visitor away from the page.
+        onClick={(e) => {
+          if (Date.now() - addedAt.current < 500) e.preventDefault();
+        }}
+      >
         <span key={added} className={cn("grid place-items-center", added > 0 && "sal-cart-pop")}>
           <Icon name="check" size={18} />
         </span>
@@ -106,7 +116,11 @@ export function CatalogCartButton({ id, name, size = "md", className }: { id: st
     <Button
       size={size}
       className={cls}
-      onClick={() => {
+      onClick={(e) => {
+        // A quick second tap (before the button turns into "In cart") must not add a second unit.
+        if (cartStore.get().some((l) => l.variantId === id)) return;
+        flyToCart(e.currentTarget);
+        addedAt.current = Date.now();
         cartStore.add({ variantId: id, name, seenPriceKzt: null });
         setAdded((n) => n + 1);
         toast(t.request.added, "success", { label: t.common.cart, href: href("/cart") });
@@ -141,6 +155,7 @@ export function OfferActions({
   const cart = useCart();
   const [askOpen, setAskOpen] = useState(false);
   const [qty, setQty] = useState(1);
+  const addedAt = useRef(0);
   const inCart = hydrated ? cart.find((l) => l.variantId === variantId) : undefined;
   const full = layout === "page";
   const btnSize = full ? "lg" : "md";
@@ -182,7 +197,13 @@ export function OfferActions({
   if (inCart) {
     return (
       <div className={cn("flex items-center gap-2", full ? "flex-wrap" : "")}>
-        <Link href={href("/cart")} className={buttonClass("secondary", btnSize, full ? "sm:min-w-44" : "flex-1")}>
+        <Link
+          href={href("/cart")}
+          className={buttonClass("secondary", btnSize, full ? "sm:min-w-44" : "flex-1")}
+          onClick={(e) => {
+            if (Date.now() - addedAt.current < 500) e.preventDefault();
+          }}
+        >
           <Icon name="check" size={18} />
           {t.offer.inCart}
         </Link>
@@ -198,7 +219,11 @@ export function OfferActions({
     );
   }
 
-  const add = (seenPrice: number | null, message: string) => {
+  const add = (seenPrice: number | null, message: string, from: Element | null) => {
+    // A quick second tap (before the button turns into "In cart") must not add the quantity twice.
+    if (cartStore.get().some((l) => l.variantId === variantId)) return;
+    flyToCart(from);
+    addedAt.current = Date.now();
     cartStore.add({ variantId, name: fullName, seenPriceKzt: seenPrice }, full ? qty : 1);
     toast(message, "success", { label: t.common.cart, href: href("/cart") });
   };
@@ -209,7 +234,7 @@ export function OfferActions({
         {full ? (
           <QuantitySelector value={qty} max={offer.quantity !== null ? Math.max(1, Math.min(10, offer.quantity)) : 10} onChange={setQty} labels={{ quantity: t.offer.quantity, decrease: t.offer.decrease, increase: t.offer.increase }} />
         ) : null}
-        <Button size={btnSize} icon="cart" className={full ? "sm:min-w-52" : "w-full"} onClick={() => add(offer.priceKzt, t.offer.added)}>
+        <Button size={btnSize} icon="cart" className={full ? "sm:min-w-52" : "w-full"} onClick={(e) => add(offer.priceKzt, t.offer.added, e.currentTarget)}>
           {t.offer.addToCart}
         </Button>
       </div>
@@ -233,8 +258,8 @@ export function OfferActions({
               {t.common.cancel}
             </Button>
             <Button
-              onClick={() => {
-                add(null, t.offer.askAdded);
+              onClick={(e) => {
+                add(null, t.offer.askAdded, e.currentTarget);
                 setAskOpen(false);
               }}
             >

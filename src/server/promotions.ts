@@ -1,7 +1,7 @@
 import "server-only";
 import { prisma } from "./db";
 import { activePromotionWhere, listVariants, type VariantCard } from "./catalog";
-import { pickLocalized, type Locale } from "@/lib/i18n";
+import { categoryName, pickLocalized, pickLocalizedOptional, type Locale } from "@/lib/i18n";
 
 export interface PromotionView {
   slug: string;
@@ -44,8 +44,8 @@ function toView(p: Row, locale: Locale, now: Date): PromotionView {
   return {
     slug: p.slug,
     title: pickLocalized(locale, p.titleRu, p.titleKk),
-    description: locale === "kk" ? (p.descriptionKk ?? p.descriptionRu) : p.descriptionRu,
-    terms: locale === "kk" ? (p.termsKk ?? p.termsRu) : p.termsRu,
+    description: pickLocalizedOptional(locale, p.descriptionRu, p.descriptionKk),
+    terms: pickLocalizedOptional(locale, p.termsRu, p.termsKk),
     imageUrl: p.imageUrl,
     type: p.type,
     benefitValue: p.benefitValue,
@@ -58,7 +58,7 @@ function toView(p: Row, locale: Locale, now: Date): PromotionView {
     pharmacies: p.pharmacies
       .filter((x) => x.pharmacy.isActive)
       .map((x) => ({ slug: x.pharmacy.slug, address: pickLocalized(locale, x.pharmacy.addressRu, x.pharmacy.addressKk) })),
-    categories: p.categories.map((c) => ({ slug: c.category.slug, name: pickLocalized(locale, c.category.nameRu, c.category.nameKk) })),
+    categories: p.categories.map((c) => ({ slug: c.category.slug, name: categoryName(locale, c.category.slug, c.category.nameRu, c.category.nameKk) })),
     variantIds: p.variants.map((v) => v.variantId),
   };
 }

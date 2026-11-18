@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { locales } from "./i18n/config";
 
 export const cartItemSchema = z.object({
   variantId: z.string().min(1).max(40),
@@ -21,7 +22,7 @@ export const orderRequestSchema = z.object({
   comment: z.string().trim().max(500, "commentTooLong").optional().default(""),
   deliveryAddress: z.string().trim().max(300).optional().default(""),
   consent: z.literal(true, { error: "consentRequired" }),
-  locale: z.enum(["ru", "kk"]).default("ru"),
+  locale: z.enum(locales).default("ru"),
   items: z.array(cartItemSchema).min(1, "cartEmpty").max(100),
 });
 

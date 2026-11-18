@@ -3,7 +3,7 @@
 import Link from "next/link";
 import type { CatalogItem, CatalogPage } from "@/server/catalog-items";
 import type { Dictionary, Locale } from "@/lib/i18n";
-import { fmt, localizedPath } from "@/lib/i18n/config";
+import { dataLang, fmt, localeTags, localizedPath } from "@/lib/i18n/config";
 import { formatKzt } from "@/lib/format";
 import { Breadcrumbs, type Crumb } from "../ui/Breadcrumbs";
 import { Pagination } from "../ui/Pagination";
@@ -79,7 +79,7 @@ export function CatalogItemCard({ item, t, locale, priority = false }: { item: C
       </div>
       <div className="flex flex-1 flex-col gap-1 p-3 sm:p-4">
         {item.category ? <p className="truncate text-xs font-semibold text-brand-700">{item.category}</p> : null}
-        <h3 className="line-clamp-3 text-[0.9rem] leading-snug font-semibold break-words text-ink sm:text-[0.95rem]" title={item.name}>
+        <h3 className="line-clamp-3 text-[0.9rem] leading-snug font-semibold break-words text-ink sm:text-[0.95rem]" title={item.name} lang={dataLang(locale, item.name)}>
           <Link href={href} className="after:absolute after:inset-0 after:z-[1] after:content-[''] hover:text-brand-700 focus-visible:outline-none">
             {item.name}
           </Link>
@@ -167,7 +167,7 @@ export function CatalogItemsView({
         <>
           <div className="mt-5 flex flex-wrap items-baseline justify-between gap-2">
             <p className="text-sm text-muted" aria-live="polite">
-              {fmt(q ? t.items.totalFound : t.items.total, { count: result.total.toLocaleString(locale === "kk" ? "kk-KZ" : "ru-KZ") })}
+              {fmt(q ? t.items.totalFound : t.items.total, { count: result.total.toLocaleString(localeTags[locale]) })}
               {result.pageCount > 1 && !outOfRange ? ` · ${fmt(t.items.pageOf, { page: result.page, pages: result.pageCount })}` : ""}
             </p>
           </div>

@@ -7,7 +7,7 @@ import { getSettings } from "./settings";
 import { computeOffer, type Offer, type PrescriptionValue, type StockStatusValue } from "@/lib/offer";
 import { escapeLike, fixKeyboardLayout, normalizeSearchText, tokenize } from "@/lib/search-normalize";
 import type { Locale } from "@/lib/i18n";
-import { pickLocalized } from "@/lib/i18n";
+import { categoryName, getDictionary, localizedPath, pickLocalized } from "@/lib/i18n";
 import { suggestCatalogItems } from "./catalog-items";
 
 export const PAGE_SIZE = 24;
@@ -79,7 +79,7 @@ export const getCategoryTree = cache(async (locale: Locale) => {
       id: r.id,
       parentId: r.parentId,
       slug: r.slug,
-      name: pickLocalized(locale, r.nameRu, r.nameKk),
+      name: categoryName(locale, r.slug, r.nameRu, r.nameKk),
       nameRu: r.nameRu,
       iconKey: r.iconKey,
       sortOrder: r.sortOrder,
@@ -415,29 +415,28 @@ export async function suggest(q: string, locale: Locale): Promise<{ items: Sugge
       take: 3,
       orderBy: { sortOrder: "asc" },
     });
-    const prefix = locale === "kk" ? "/kk" : "";
     return [
       ...cats.map<Suggestion>((c) => ({
         type: "category",
-        label: pickLocalized(locale, c.nameRu, c.nameKk),
-        href: `${prefix}/catalog/${c.slug}`,
+        label: categoryName(locale, c.slug, c.nameRu, c.nameKk),
+        href: localizedPath(locale, `/catalog/${c.slug}`),
       })),
       ...rows.map<Suggestion>((r) => ({
         type: "variant",
         label: r.fullName,
         sublabel: r.brandName ?? undefined,
-        href: `${prefix}/product/${r.productSlug}?sku=${encodeURIComponent(r.slug)}`,
+        href: localizedPath(locale, `/product/${r.productSlug}?sku=${encodeURIComponent(r.slug)}`),
       })),
     ];
   };
   // Real assortment first (public.pharmacy_products), one suggestion per unique id.
-  const prefix = locale === "kk" ? "/kk" : "";
+  const articleLabel = getDictionary(locale).items.article;
   const catalog = await suggestCatalogItems(q, 7);
   const catalogItems: Suggestion[] = catalog.items.map((i) => ({
     type: "variant",
     label: i.name,
-    sublabel: i.article ? `Артикул: ${i.article}` : undefined,
-    href: `${prefix}/catalog/item/${i.id}`,
+    sublabel: i.article ? `${articleLabel}: ${i.article}` : undefined,
+    href: localizedPath(locale, `/catalog/item/${i.id}`),
   }));
   if (catalogItems.length) {
     const cats = (await run(catalog.query)).filter((s) => s.type === "category");

@@ -306,19 +306,227 @@ dialog.sal-drawer-bottom[data-closing] {
   .sal-hero-visual {
     animation: 700ms var(--ease-out-soft) 120ms backwards sal-hero-visual-in;
   }
-
-  .sal-hero-ring {
-    animation: 18s ease-in-out sal-ring-drift;
-  }
   .sal-home-revealed {
-    animation: 360ms var(--ease-out-soft) var(--reveal-delay, 0ms) backwards sal-rise-in;
+    animation: 420ms var(--ease-out-soft) var(--reveal-delay, 0ms) backwards sal-rise-in;
   }
   @media (min-width: 64rem) {
     .sal-home-grid > :nth-child(3n + 2) { --reveal-delay: 40ms; }
     .sal-home-grid > :nth-child(3n) { --reveal-delay: 80ms; }
+    /* The three request steps appear one after another. */
+    .sal-steps > :nth-child(2) { --reveal-delay: 110ms; }
+    .sal-steps > :nth-child(3) { --reveal-delay: 220ms; }
   }
   @media (hover: hover) and (pointer: fine) {
     .sal-pharmacy-card:hover { translate: 0 -2px; }
+  }
+}
+
+/* Hero mark (HeroVisual.tsx). --hx/--hy: pointer position (-1..1), --turn: drag rotation. Long transitions make
+   the rings follow the pointer lazily and bring everything back smoothly when the pointer leaves or is released. */
+.sal-logo {
+  --hx: 0;
+  --hy: 0;
+  --turn: 0deg;
+  touch-action: pan-y;
+  cursor: grab;
+  -webkit-tap-highlight-color: transparent;
+}
+.sal-logo[data-dragging] {
+  cursor: grabbing;
+}
+.sal-logo-glow {
+  background: radial-gradient(closest-side, rgb(0 152 70 / 0.16), transparent 72%);
+}
+.sal-logo-ring-outer,
+.sal-logo-ring,
+.sal-logo-disc,
+.sal-logo-mark {
+  transition: transform 900ms var(--ease-out-soft);
+}
+.sal-logo[data-dragging] .sal-logo-mark,
+.sal-logo[data-dragging] .sal-logo-ring-outer {
+  transition-duration: 80ms;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .sal-logo-ring-outer {
+    transform: translate(calc(var(--hx) * 10px), calc(var(--hy) * 10px)) rotate(calc(var(--hx) * 14deg + var(--turn) * 0.35));
+  }
+  .sal-logo-ring {
+    transform: translate(calc(var(--hx) * 7px), calc(var(--hy) * 7px)) scale(calc(1 + (var(--hx) * var(--hx) + var(--hy) * var(--hy)) * 0.015));
+  }
+  .sal-logo-disc {
+    transform: translate(calc(var(--hx) * -3px), calc(var(--hy) * -3px));
+  }
+  .sal-logo-mark {
+    transform: translate(calc(var(--hx) * -5px), calc(var(--hy) * -5px)) rotate(calc(var(--hx) * 6deg + var(--turn)));
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sal-logo {
+    cursor: default;
+  }
+}
+
+/* Home product carousel (ProductCarousel.tsx). Native scrolling with snap; on wide screens the hidden side
+   fades out softly so it is clear there is more to see. */
+.sal-carousel {
+  scrollbar-width: none;
+}
+.sal-carousel::-webkit-scrollbar {
+  display: none;
+}
+.sal-carousel > li {
+  display: flex;
+}
+.sal-carousel > li > * {
+  flex: 1;
+}
+.sal-carousel-btn {
+  transition:
+    background-color 180ms var(--ease-out-soft),
+    border-color 180ms var(--ease-out-soft),
+    color 180ms var(--ease-out-soft),
+    opacity 200ms var(--ease-out-soft),
+    scale 160ms var(--ease-out-soft);
+}
+.sal-carousel-btn:hover:not(:disabled) {
+  border-color: var(--color-brand-600);
+  color: var(--color-brand-700);
+  background-color: var(--color-brand-50);
+}
+.sal-carousel-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+  box-shadow: none;
+}
+.sal-carousel-btn:focus-visible {
+  outline: 3px solid var(--color-brand-600);
+  outline-offset: 2px;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .sal-carousel-btn:active:not(:disabled) {
+    scale: 0.94;
+  }
+}
+@media (min-width: 64rem) {
+  .sal-carousel[data-overflow]:not([data-at-end]) {
+    mask-image: linear-gradient(to right, #000 calc(100% - 3.5rem), transparent);
+  }
+  .sal-carousel[data-overflow]:not([data-at-start]) {
+    mask-image: linear-gradient(to right, transparent, #000 3.5rem);
+  }
+  .sal-carousel[data-overflow]:not([data-at-start]):not([data-at-end]) {
+    mask-image: linear-gradient(to right, transparent, #000 3.5rem, #000 calc(100% - 3.5rem), transparent);
+  }
+}
+
+/* Language switcher (HeaderParts.tsx): the white pill slides to the chosen language; --lang-i is its index. */
+.sal-lang-pill {
+  transform: translateX(calc(var(--lang-i, 0) * 100%));
+  transition: transform 260ms var(--ease-out-soft);
+}
+
+/* "How to send a request": information cards, not links. Hover lifts the card a few pixels, tints the border
+   and shadow, gives the number a soft halo and turns the icon; everything eases back on leave. */
+.sal-step {
+  transition:
+    translate 280ms var(--ease-out-soft),
+    box-shadow 280ms var(--ease-out-soft),
+    border-color 280ms var(--ease-out-soft);
+}
+.sal-step::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(120% 90% at 0% 0%, var(--color-brand-50), transparent 62%);
+  opacity: 0;
+  transition: opacity 320ms var(--ease-out-soft);
+}
+.sal-step-num {
+  transition: scale 320ms var(--ease-out-soft), box-shadow 320ms var(--ease-out-soft), background-color 320ms var(--ease-out-soft);
+}
+.sal-step-icon {
+  transition: rotate 340ms var(--ease-out-soft), scale 340ms var(--ease-out-soft), background-color 300ms, color 300ms;
+}
+@media (hover: hover) and (pointer: fine) {
+  .sal-step:hover {
+    border-color: var(--color-brand-200);
+    box-shadow: 0 2px 4px rgb(20 35 26 / 0.04), 0 16px 36px rgb(0 122 61 / 0.1);
+  }
+  .sal-step:hover::before {
+    opacity: 1;
+  }
+  .sal-step:hover .sal-step-num {
+    background-color: var(--color-brand-700);
+    box-shadow: 0 0 0 6px var(--color-brand-100);
+  }
+  .sal-step:hover .sal-step-icon {
+    background-color: var(--color-brand-600);
+    color: #fff;
+  }
+}
+/* Touch screens: a quiet acknowledgement while the finger is down (the cards lead nowhere). */
+@media (hover: none) {
+  .sal-step:active {
+    border-color: var(--color-brand-200);
+  }
+  .sal-step:active::before {
+    opacity: 0.7;
+  }
+}
+@media (prefers-reduced-motion: no-preference) and (hover: hover) and (pointer: fine) {
+  .sal-step:hover {
+    translate: 0 -4px;
+  }
+  .sal-step:hover .sal-step-num {
+    scale: 1.06;
+  }
+  .sal-step:hover .sal-step-icon {
+    rotate: -10deg;
+    scale: 1.06;
+  }
+}
+
+/* Add to cart: the flying dot (lib/client/fly-to-cart.ts) and the bump of the cart icon and its counter. */
+.sal-fly {
+  position: fixed;
+  z-index: 70;
+  width: 22px;
+  height: 22px;
+  pointer-events: none;
+  will-change: transform;
+}
+.sal-fly-dot {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 9999px;
+  background: var(--color-brand-600);
+  box-shadow: 0 0 0 3px #fff, 0 6px 16px rgb(0 122 61 / 0.35);
+  will-change: transform;
+}
+.sal-cart-bump {
+  animation: sal-cart-bump 440ms var(--ease-out-soft);
+}
+.sal-badge-bump {
+  animation: sal-badge-bump 380ms var(--ease-out-soft) backwards;
+}
+@keyframes sal-cart-bump {
+  35% {
+    transform: scale(1.22) rotate(-8deg);
+  }
+  65% {
+    transform: scale(0.95) rotate(4deg);
+  }
+}
+@keyframes sal-badge-bump {
+  from {
+    scale: 0.6;
+    opacity: 0.6;
+  }
+  55% {
+    scale: 1.25;
+    opacity: 1;
   }
 }
 

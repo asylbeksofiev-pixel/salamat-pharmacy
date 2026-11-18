@@ -14,7 +14,7 @@ export function Footer({ locale, t, helpline, company, categories, orderingEnabl
       <div className="container-page grid gap-10 py-12 sm:grid-cols-2 lg:grid-cols-[1.3fr_1fr_1fr_1fr]">
         <div className="flex flex-col gap-4">
           <Image src="/brand/salamat-logo.png" alt="SALAMAT" width={1450} height={366} className="h-9 w-auto self-start" />
-          <p className="max-w-xs text-sm text-muted">{t.meta.siteName}. {t.home.heroSince}.</p>
+          <p className="max-w-xs text-sm text-muted">{t.meta.siteName} — {t.home.heroSince}.</p>
           <a href={telHref(helpline)} className="flex items-center gap-3 self-start rounded-[var(--radius-lg)] bg-white p-3 pr-5 shadow-[var(--shadow-card)] hover:text-brand-700">
             <span className="grid size-10 place-items-center rounded-full bg-brand-50 text-brand-700">
               <Icon name="phone" size={20} />
@@ -61,7 +61,7 @@ export function Footer({ locale, t, helpline, company, categories, orderingEnabl
             <p className="font-semibold text-ink-soft">{t.footer.medicalNote}</p>
           </div>
           <p className="shrink-0">
-            © 2016–{year} {company.legalName}. {locale === "kk" ? "БСН" : "БИН"} {company.bin.replace(/(\d{3})(?=\d)/g, "$1 ")}. {t.footer.rights}
+            © 2016–{year} {company.legalName}. {t.footer.binLabel} {company.bin.replace(/(\d{3})(?=\d)/g, "$1 ")}. {t.footer.rights}
           </p>
         </div>
       </div>

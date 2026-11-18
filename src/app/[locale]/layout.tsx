@@ -3,7 +3,7 @@ import "../globals.css";
 import type { Metadata, Viewport } from "next";
 import { ViewTransition } from "react";
 import { notFound } from "next/navigation";
-import { getDictionary, isLocale, localeTags, locales, type Locale } from "@/lib/i18n";
+import { cityName as localizedCityName, getDictionary, isLocale, localeTags, locales, type Locale } from "@/lib/i18n";
 import { getCategoryTree } from "@/server/catalog";
 import { getPharmacies, getSelectedPharmacy } from "@/server/pharmacies";
 import { getSettings } from "@/server/settings";
@@ -78,7 +78,7 @@ export default async function LocaleLayout({ children, params }: LayoutProps<"/[
       iconKey: c.iconKey,
       children: c.children.filter((x) => store.categoryIdsWithProducts.has(x.id)).map((x) => ({ slug: x.slug, name: x.name })),
     }));
-  const cityName = city ? (locale === "kk" ? (city.nameKk ?? city.nameRu) : city.nameRu) : t.header.cityAstana;
+  const cityName = city ? localizedCityName(locale, city.slug, city.nameRu, city.nameKk) : t.header.cityAstana;
 
   return (
     <html lang={localeTags[locale]} className="h-full" data-scroll-behavior="smooth">

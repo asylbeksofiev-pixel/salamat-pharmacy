@@ -16,7 +16,7 @@ export function ContentPageView({ page, t, locale, children, aside }: { page: Pa
           <h1 className="text-[1.75rem] leading-tight font-bold tracking-tight sm:text-[2.25rem]">{page.title}</h1>
           <div className="mt-4 flex flex-col gap-3">
             {page.requiresLegalReview ? <Notice tone="warning">{t.pages.legalReview}</Notice> : null}
-            {!page.translated ? <Notice tone="info" icon="globe"><span lang="ru">{t.pages.notTranslated}</span></Notice> : null}
+            {!page.translated ? <Notice tone="info" icon="globe">{t.pages.notTranslated}</Notice> : null}
           </div>
           <div className="mt-4" lang={page.translated ? undefined : "ru"}>
             <Markdown>{page.body}</Markdown>

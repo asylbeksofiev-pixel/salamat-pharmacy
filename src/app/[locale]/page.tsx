@@ -1,8 +1,7 @@
-import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getDictionary, isLocale, localizedPath } from "@/lib/i18n";
-import { fmt } from "@/lib/i18n/config";
+import { fmt, localeTags } from "@/lib/i18n/config";
 import { formatPhone, telHref } from "@/lib/format";
 import { getCategoryTree } from "@/server/catalog";
 import { getPharmacies, getSelectedPharmacy, routeLinks } from "@/server/pharmacies";
@@ -14,10 +13,12 @@ import { getStorefrontState } from "@/server/storefront";
 import { CatalogSearchForm } from "@/components/catalog/CatalogSearchForm";
 import { pageMetadata } from "@/server/seo";
 import { HeroStats } from "@/components/site/HeroStats";
+import { HeroVisual } from "@/components/site/HeroVisual";
 import { HomeScrollMotion } from "@/components/site/HomeScrollMotion";
 import { CategoryTile, PharmacyCard, PromotionCard } from "@/components/catalog/Tiles";
 import { ProductGrid } from "@/components/catalog/ProductCard";
-import { CatalogItemGrid } from "@/components/catalog/CatalogItems";
+import { CatalogItemCard } from "@/components/catalog/CatalogItems";
+import { CAROUSEL_ITEM, ProductCarousel } from "@/components/catalog/ProductCarousel";
 import { ButtonLink } from "@/components/ui/Button";
 import { Icon } from "@/components/icons";
 
@@ -45,7 +46,7 @@ function SectionTitle({ id, title, action, text }: { id: string; title: string; 
 /** Catalogue preview for the home page; on a database error the section still leads to the catalogue. */
 async function catalogPreview(): Promise<CatalogItem[]> {
   try {
-    return await listCatalogPreview(4);
+    return await listCatalogPreview(12);
   } catch (e) {
     console.error("catalog preview failed", (e as Error).message.slice(0, 200));
     return [];
@@ -67,7 +68,7 @@ export default async function HomePage({ params }: PageProps<"/[locale]">) {
   ]);
   // Only sections that really contain products; with no categorised products the block becomes a catalogue entry.
   const roots = tree.roots.filter((c) => store.categoryIdsWithProducts.has(c.id));
-  const numberLocale = locale === "kk" ? "kk-KZ" : "ru-KZ";
+  const numberLocale = localeTags[locale];
   const featured = await featuredItems(locale, selected?.id ?? null);
   const href = (p: string) => localizedPath(locale, p);
   const shownPharmacies = selected ? [selected, ...pharmacies.filter((p) => p.id !== selected.id)].slice(0, 6) : pharmacies.slice(0, 6);
@@ -77,13 +78,13 @@ export default async function HomePage({ params }: PageProps<"/[locale]">) {
       {/* Hero: what SALAMAT offers and where to start. Search lives in the header; the catalogue section below
           is the second way in, so the hero itself has no search field. */}
       <section className="relative overflow-hidden border-b border-line bg-[radial-gradient(120%_90%_at_85%_10%,var(--color-brand-100)_0%,transparent_55%),linear-gradient(180deg,var(--color-brand-50)_0%,#fff_100%)]">
-        <div className="container-page grid items-center gap-10 pt-9 pb-11 sm:pt-12 md:pb-14 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] lg:gap-14 lg:py-20">
+        <div className="container-page grid items-center gap-8 pt-8 pb-11 sm:pt-12 md:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)] md:gap-8 md:pb-14 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] lg:gap-14 lg:py-20">
           <div className="sal-hero-copy relative z-10 flex flex-col items-start gap-5 md:gap-6">
             <p className="inline-flex items-center gap-2 rounded-full border border-brand-100 bg-white/90 px-3 py-1 text-sm font-semibold text-brand-800 shadow-[var(--shadow-card)]">
               <span className="size-2 rounded-full bg-accent-500" aria-hidden="true" />
               {t.meta.siteName}
             </p>
-            <h1 className="max-w-[16ch] text-[2.25rem] leading-[1.05] font-extrabold tracking-[-0.025em] text-balance text-ink sm:text-[3.25rem] lg:text-[3.75rem]">{t.home.heroTitle}</h1>
+            <h1 className="max-w-[16ch] text-[2.25rem] leading-[1.05] font-extrabold tracking-[-0.025em] text-balance text-ink sm:text-[3.25rem] md:text-[2.9rem] lg:text-[3.75rem]">{t.home.heroTitle}</h1>
             <p className="max-w-[34rem] text-[1.05rem] leading-relaxed text-ink-soft sm:text-lg">{t.home.heroText}</p>
             <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center">
               <ButtonLink href={href("/catalog")} size="lg" icon="grid" className="w-full sm:w-auto">
@@ -103,27 +104,25 @@ export default async function HomePage({ params }: PageProps<"/[locale]">) {
               ]}
             />
           </div>
-          <div className="sal-hero-visual relative hidden aspect-square w-full max-w-[32rem] justify-self-center lg:block" aria-hidden="true">
-            <div className="sal-hero-ring absolute inset-[4%] rounded-full bg-brand-100/70" />
-            <div className="absolute inset-[16%] rounded-full bg-white shadow-[0_30px_80px_rgb(0_122_61/0.18)]" />
-            <div className="absolute inset-[28%]">
-              <Image src="/brand/salamat-mark.png" alt="" fill sizes="300px" className="object-contain" priority />
-            </div>
-            <div className="absolute top-[12%] left-0 flex max-w-[16rem] items-center gap-3 rounded-[var(--radius-lg)] bg-white px-4 py-3 shadow-[var(--shadow-pop)]">
-              <span className="grid size-10 shrink-0 place-items-center rounded-full bg-brand-50 text-brand-700">
-                <Icon name="pin" size={20} />
-              </span>
-              <span className="min-w-0">
-                <span className="block text-xs text-muted">{selected ? t.header.yourPharmacy : t.header.cityAstana}</span>
-                <span className="block truncate text-sm font-semibold">{selected ? selected.address : fmt(t.pharmacy.count, { count: pharmacies.length })}</span>
-              </span>
-            </div>
-            <div className="absolute right-0 bottom-[14%] flex items-center gap-3 rounded-[var(--radius-lg)] bg-white px-4 py-3 shadow-[var(--shadow-pop)]">
-              <span className="grid size-10 place-items-center rounded-full bg-accent-50 text-accent-600">
-                <Icon name={store.orderingEnabled ? "store" : "phone"} size={20} />
-              </span>
-              <span className="text-sm font-semibold">{store.orderingEnabled ? t.checkout.pickup : t.items.ask}</span>
-            </div>
+          {/* The SALAMAT mark: large on wide screens, a compact composition above the text on phones and tablets. */}
+          <div className="sal-hero-visual relative order-first mx-auto w-full max-w-[11.5rem] sm:max-w-[14rem] md:order-none md:max-w-[17rem] lg:max-w-[34rem] lg:justify-self-center">
+            <HeroVisual className="w-full">
+              <div className="absolute top-[11%] -left-[6%] hidden max-w-[16rem] items-center gap-3 rounded-[var(--radius-lg)] bg-white/95 px-4 py-3 shadow-[var(--shadow-pop)] backdrop-blur lg:flex">
+                <span className="grid size-10 shrink-0 place-items-center rounded-full bg-brand-50 text-brand-700">
+                  <Icon name="pin" size={20} />
+                </span>
+                <span className="min-w-0">
+                  <span className="block text-xs text-muted">{selected ? t.header.yourPharmacy : t.header.cityAstana}</span>
+                  <span className="block truncate text-sm font-semibold">{selected ? selected.address : fmt(t.pharmacy.count, { count: pharmacies.length })}</span>
+                </span>
+              </div>
+              <div className="absolute -right-[22%] bottom-[6%] flex items-center gap-2 rounded-full bg-white/95 py-1.5 pr-3 pl-1.5 shadow-[var(--shadow-pop)] backdrop-blur md:right-[-2%] md:bottom-[-4%] lg:right-[-4%] lg:bottom-[13%] lg:gap-3 lg:rounded-[var(--radius-lg)] lg:px-4 lg:py-3">
+                <span className="grid size-7 shrink-0 place-items-center rounded-full bg-accent-50 text-accent-600 lg:size-10">
+                  <Icon name={store.orderingEnabled ? "store" : "phone"} size={18} />
+                </span>
+                <span className="text-xs font-semibold whitespace-nowrap lg:text-sm">{store.orderingEnabled ? t.checkout.pickup : t.items.ask}</span>
+              </div>
+            </HeroVisual>
           </div>
         </div>
       </section>
@@ -147,19 +146,38 @@ export default async function HomePage({ params }: PageProps<"/[locale]">) {
             <CatalogSearchForm action={href("/catalog")} q="" />
           </div>
         </div>
-        {/* Four cards: 2 × 2 on phones and tablets, one row on wide screens — never a lone card in a row. */}
+        {/* Up to 12 real products in a swipeable row; the buttons appear only when something is hidden. */}
         {preview.length ? (
-          <CatalogItemGrid items={preview} t={t} locale={locale} reveal grid="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4" />
+          <div data-home-reveal>
+            <ProductCarousel
+              label={t.home.carouselLabel}
+              prevLabel={t.home.carouselPrev}
+              nextLabel={t.home.carouselNext}
+              action={
+                <ButtonLink href={href("/catalog")} size="lg" iconRight="chevronRight" className="w-full sm:w-auto sm:min-w-64">
+                  {t.request.viewAll}
+                </ButtonLink>
+              }
+            >
+              {preview.map((item, i) => (
+                <li key={item.id} className={CAROUSEL_ITEM}>
+                  <CatalogItemCard item={item} t={t} locale={locale} priority={i < 2} />
+                </li>
+              ))}
+            </ProductCarousel>
+          </div>
         ) : (
-          <p data-home-reveal className="rounded-[var(--radius-xl)] border border-dashed border-line-strong bg-surface/60 px-5 py-8 text-center text-muted">
-            {t.request.catalogEmpty}
-          </p>
+          <>
+            <p data-home-reveal className="rounded-[var(--radius-xl)] border border-dashed border-line-strong bg-surface/60 px-5 py-8 text-center text-muted">
+              {t.request.catalogEmpty}
+            </p>
+            <div className="mt-6 flex justify-center">
+              <ButtonLink href={href("/catalog")} size="lg" iconRight="chevronRight" className="w-full sm:w-auto sm:min-w-64">
+                {t.request.viewAll}
+              </ButtonLink>
+            </div>
+          </>
         )}
-        <div data-home-reveal className="mt-8 flex justify-center">
-          <ButtonLink href={href("/catalog")} size="lg" variant="outline" iconRight="chevronRight" className="w-full sm:w-auto sm:min-w-64">
-            {t.request.viewAll}
-          </ButtonLink>
-        </div>
       </section>
 
       {/* Category navigation only for sections that really contain products. */}
@@ -220,17 +238,21 @@ export default async function HomePage({ params }: PageProps<"/[locale]">) {
       <section aria-labelledby="h-how" className="bg-surface py-12 md:py-16">
         <div className="container-page">
           <SectionTitle id="h-how" title={t.home.howTitle} />
-          <ol className="sal-home-grid grid gap-4 lg:grid-cols-3">
+          {/* Information cards (not links): hover lift and a calm reaction of the number and icon (.sal-step). */}
+          <ol className="sal-steps sal-home-grid grid gap-4 lg:grid-cols-3 lg:gap-5">
             {[
               { n: 1, title: t.home.how1Title, text: t.home.how1Text, icon: "search" as const },
               { n: 2, title: t.home.how2Title, text: t.home.how2Text, icon: "cart" as const },
               { n: 3, title: t.home.how3Title, text: t.home.how3Text, icon: "phone" as const },
             ].map((s) => (
-              <li key={s.n} data-home-reveal className="flex gap-4 rounded-[var(--radius-xl)] bg-white p-5 shadow-[var(--shadow-card)] sm:p-6">
-                <span className="grid size-12 shrink-0 place-items-center rounded-full bg-brand-600 text-lg font-bold text-white">{s.n}</span>
-                <span>
-                  <span className="block font-semibold text-ink">{s.title}</span>
-                  <span className="mt-1 block text-sm text-muted">{s.text}</span>
+              <li key={s.n} data-home-reveal className="sal-step relative flex gap-4 overflow-hidden rounded-[var(--radius-xl)] border border-line/70 bg-white p-5 shadow-[var(--shadow-card)] sm:p-6">
+                <span className="sal-step-num relative z-[1] grid size-12 shrink-0 place-items-center rounded-full bg-brand-600 text-lg font-bold text-white tabular-nums">{s.n}</span>
+                <span className="relative z-[1] min-w-0 pr-8">
+                  <span className="block text-[1.05rem] font-semibold text-ink">{s.title}</span>
+                  <span className="mt-1 block text-sm leading-relaxed text-muted">{s.text}</span>
+                </span>
+                <span className="sal-step-icon absolute top-4 right-4 grid size-9 place-items-center rounded-full bg-brand-50 text-brand-600" aria-hidden="true">
+                  <Icon name={s.icon} size={18} />
                 </span>
               </li>
             ))}
@@ -266,11 +288,7 @@ export default async function HomePage({ params }: PageProps<"/[locale]">) {
             <path d="M12 20s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.2a4.3 4.3 0 0 1 7.5 2.6C19.5 15.4 12 20 12 20Z" />
           </svg>
           <h2 id="h-about" className="relative text-2xl font-bold">{t.home.aboutTitle}</h2>
-          <p className="relative mt-3 max-w-2xl text-white/85">
-            {locale === "kk"
-              ? "Дәрілік заттармен, медициналық бұйымдармен және емдік косметикамен сапалы қызмет көрсету арқылы денсаулық пен сұлулыққа қамқорлық жасау — желінің миссиясы. Дәріханаларда GPP сапа сертификаты бар."
-              : "Миссия сети — забота о здоровье и красоте путём качественного обслуживания лекарственными средствами, медицинскими изделиями и лечебной косметикой. Аптеки сети обладают сертификатом качества GPP."}
-          </p>
+          <p className="relative mt-3 max-w-2xl text-white/85">{t.home.aboutText}</p>
           <Link href={href("/about")} className="relative mt-6 inline-flex h-11 items-center gap-2 rounded-[var(--radius-md)] bg-white px-4 font-semibold text-brand-800 hover:bg-brand-50">
             {t.common.more}
             <Icon name="chevronRight" size={18} />
