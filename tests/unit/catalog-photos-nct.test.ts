@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { brandConfirmed, nameSimilarity, sameWord, significantWords, translit } from "@/lib/catalog-photos/similarity";
 import { assessNctCard, type NctCard } from "@/lib/catalog-photos/nct-match";
-import { queryWords, safeQuery } from "../../scripts/catalog-photos/nct";
+import { queryWords, safeQuery, simplifyQuery } from "../../scripts/catalog-photos/nct";
 
 const card = (over: Partial<NctCard> = {}): NctCard => ({
   id: 1,
@@ -68,12 +68,46 @@ describe("NCT card grading", () => {
     expect(a.grade).toBe("probable");
   });
 
-  it("treats another flavour found by name as doubtful at best", () => {
+  it("treats another flavour found by name as another product", () => {
     const a = assessNctCard(
       { name: "Бюбхен Шампунь детский и гель для душа Ароматная Дыня 230 мл", article: "4065331002051" },
       card({ name: "БЮБХЕН ШАМПУНЬ И ГЕЛЬ ДЛЯ ДУША 2В1 ДЕТСКИЙ 230мл СЛАДКАЯ МАЛИНА", gtin: null }),
     );
-    expect(["doubtful", "unrelated"]).toContain(a.grade);
+    expect(a.grade).toBe("mismatch");
+    expect(a.reasons).toContain("variant_conflict:дыня≠малина");
+  });
+
+  it("does not confirm a barcode match whose card names another variant (black vs green tea)", () => {
+    const a = assessNctCard(
+      { name: "Тассай ice tea чёрный чай со вкусом ананас маракуия 0,5 л", article: "4870234680714" },
+      card({ name: '"TASSAY ICE TEA" (ТАССАЙ АЙС ТИ) ЗЕЛЕНЫЙ ЧАЙ СО BKУCOM AHAHACA И МАРАКУЙИ 0,5 л', gtin: "4870234680714", manufacturer: "Тассай" }),
+    );
+    expect(a.grade).toBe("probable");
+    expect(a.reasons).toContain("variant_conflict:черный≠зеленый");
+  });
+
+  it("does not treat a translated variant as another product", () => {
+    const a = assessNctCard(
+      { name: "Орзакс Океан Масло семян черного тмина 1000 мг № 60", article: "8699511330055" },
+      card({ name: "Ocean Black Seed Oil масло 1000 mg 60 caps", gtin: "8699511330055", manufacturer: "Orzax" }),
+    );
+    expect(a.reasons.some((r) => r.startsWith("variant_conflict"))).toBe(false);
+  });
+
+  it("does not treat word forms of one variant as a conflict", () => {
+    for (const [ours, theirs] of [
+      ["Геделор пастилки мята № 20", "Геделор, пастилки со вкусом мяты, №20"],
+      ["Алтайские травы Черный тмин 100 мл масло", "МАСЛО ЧЕРНОГО ТМИНА АЛТАЙСКИЕ ТРАВЫ 100МЛ"],
+      ["Зубной порошок в бан. Мятный 75г", "Зубной порошок с эфирным маслом мяты 75 г"],
+    ]) {
+      const a = assessNctCard({ name: ours, article: "4870000000014" }, card({ name: theirs, gtin: "4870000000014", manufacturer: null }));
+      expect(a.reasons.some((r) => r.startsWith("variant_conflict")), ours).toBe(false);
+    }
+  });
+
+  it("reads Latin look-alike letters inside Cyrillic names", () => {
+    expect(significantWords("ЗЕЛЕНЫЙ ЧАЙ СО BKУCOM AHAHACA И МАРАКУЙИ")).toEqual(["зеленый", "чай", "вкусом", "ананаса", "маракуйи"]);
+    expect(significantWords("NOW Alpha Lipoic Acid")).toEqual(["now", "alpha", "lipoic", "acid"]);
   });
 
   it("does not let a manufacturer's box stand for SALAMAT's own repack", () => {
@@ -88,6 +122,12 @@ describe("NCT card grading", () => {
     expect(a.reasons).toContain("salamat_assortment");
   });
 
+  it("does not confirm by barcode when SALAMAT uses the article for several different products", () => {
+    const a = assessNctCard(product, card(), 2);
+    expect(a.grade).toBe("probable");
+    expect(a.reasons).toContain("article_shared_with_2_different_products");
+  });
+
   it("matches NTIN / KZTIN written in the article", () => {
     expect(assessNctCard({ name: "Парацетамол таб. 500мг №10", article: "0200091351320" }, card({ name: "Парацетамол-УБФ таб. 500мг №10", gtin: null, ntin: "0200091351320" })).method).toBe("ntin_exact");
   });
@@ -98,6 +138,16 @@ describe("NCT queries", () => {
     expect(safeQuery("4660014182244")).toBeNull();
     expect(safeQuery("Аспиратор 38023682")).toBe("Аспиратор 38023682");
     expect(safeQuery(' "Бюбхен" ')).toBe("Бюбхен");
+    // Prepositions are dropped by the search, leaving a bare barcode.
+    expect(safeQuery("из 4870201790064")).toBeNull();
+    expect(safeQuery("Для 4870201790064")).toBeNull();
+    expect(safeQuery("Венозол-")).toBe("Венозол");
+  });
+
+  it("simplifies queries the server failed on", () => {
+    expect(simplifyQuery("Болиoff")).toBe("Боли off");
+    expect(simplifyQuery("Венозол-360 капсулы")).toBe("Венозол капсулы");
+    expect(simplifyQuery("Аспиратор 38023682")).toBe("Аспиратор 38023682");
   });
 
   it("builds search words from brand and product words", () => {

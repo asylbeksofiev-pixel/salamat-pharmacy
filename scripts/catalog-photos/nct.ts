@@ -10,7 +10,7 @@ import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { NctCard } from "../../src/lib/catalog-photos/nct-match";
-import { significantWords } from "../../src/lib/catalog-photos/similarity";
+import { isSignificantWord, significantWords } from "../../src/lib/catalog-photos/similarity";
 import { HttpError, type Http } from "./http";
 import { nctQuery } from "./sources";
 
@@ -78,9 +78,31 @@ export interface SearchResult {
 }
 
 /** A query the API can answer: at least one word with letters, no bare barcode. */
+/**
+ * Plain form of a query the server failed on: hyphens become spaces, words mixing alphabets are split
+ * ("Болиoff" → "Боли off"), digits glued to letters are dropped ("Венозол-360" → "Венозол").
+ */
+export function simplifyQuery(q: string): string {
+  return q
+    .replace(/[-–—/]+/g, " ")
+    .replace(/(\p{Script=Cyrillic})(?=\p{Script=Latin})|(\p{Script=Latin})(?=\p{Script=Cyrillic})/gu, "$1$2 ")
+    .split(/\s+/)
+    .filter((w) => /\p{L}/u.test(w) || /^\d{8,14}$/.test(w))
+    .map((w) => (/^\d+$/.test(w) ? w : w.replace(/\d+/g, "")))
+    .filter(Boolean)
+    .join(" ");
+}
+
 export function safeQuery(q: string): string | null {
-  const clean = q.replace(/["\\]/g, " ").replace(/\s+/g, " ").trim();
+  const clean = q
+    .replace(/["\\]/g, " ")
+    .split(/\s+/)
+    .map((w) => w.replace(/^[-–—]+|[-–—]+$/g, "")) // "Венозол-" (after "360 мг" was removed) → "Венозол"
+    .filter(Boolean)
+    .join(" ");
   if (!/\p{L}{2,}/u.test(clean)) return null;
+  // The search drops prepositions ("из", "на", "для"); "из 4870201790064" becomes a bare barcode and the server fails.
+  if (/\d{6,}/.test(clean) && !clean.split(" ").some(isSignificantWord)) return null;
   return clean.slice(0, 120);
 }
 
@@ -142,8 +164,22 @@ export class NctClient {
     }
   }
 
-  /** Search with up to `maxPages` pages of 48 cards. Results (slim cards) are cached on disk. */
+  /**
+   * Search with up to `maxPages` pages of 48 cards. Results (slim cards) are cached on disk. When the server keeps
+   * failing (HTTP 500) on a query, a simplified form of it is tried once.
+   */
   async search(query: string, maxPages: number): Promise<SearchResult | null> {
+    try {
+      return await this.searchOnce(query, maxPages);
+    } catch (e) {
+      const simpler = simplifyQuery(query);
+      if (!(e instanceof HttpError && e.status === 500) || !safeQuery(simpler) || safeQuery(simpler) === safeQuery(query)) throw e;
+      this.log({ event: "nct_simplified_query", from: query, to: simpler });
+      return await this.searchOnce(simpler, maxPages);
+    }
+  }
+
+  private async searchOnce(query: string, maxPages: number): Promise<SearchResult | null> {
     const q = safeQuery(query);
     if (!q) return null;
     const key = `${q.toLowerCase()}|${maxPages}`;

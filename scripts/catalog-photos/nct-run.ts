@@ -3,6 +3,7 @@
 //
 //   npm run photos:nct -- run    [--limit N] [--ids 1,2] [--restart] [--force] [--max-pages 3] [--work-dir DIR]
 //   npm run photos:nct -- report [--work-dir DIR]
+//   npm run photos:nct -- export [--out data/nct]   (compact manifest for the repository)
 //
 // Products come from DIR/products.jsonl (`npm run photos -- snapshot`) or, with DATABASE_URL, from
 // public.pharmacy_products (READ ONLY, by id). Progress: DIR/nct/state.json (last finished id), results.jsonl (one line per
@@ -16,6 +17,7 @@ import { classifyArticle } from "../../src/lib/catalog-photos/barcode";
 import { describeAttributes, parseAttributes } from "../../src/lib/catalog-photos/attributes";
 import { assessNctCard, attributeColumns, GRADE_ORDER, nctUrl, type NctAssessment, type NctCard, type NctGrade } from "../../src/lib/catalog-photos/nct-match";
 import type { ProductRef } from "../../src/lib/catalog-photos/match";
+import { isSignificantWord } from "../../src/lib/catalog-photos/similarity";
 import { Http, HOST_INTERVAL_MS } from "./http";
 import { NctClient, queryWords } from "./nct";
 import { DbReader, SnapshotReader, type ProductReader } from "./products";
@@ -127,7 +129,12 @@ function toRow(card: NctCard, a: NctAssessment, rank: number): CandidateRow {
 
 // ---------------------------------------------------------------- one product
 
-async function processProduct(p: ProductRef, nct: NctClient, maxPages: number): Promise<ProductResult> {
+async function processProduct(p: ProductRef, nct: NctClient, maxPages: number, duplicates: Map<string, ProductRef[]>): Promise<ProductResult> {
+  // Same article on SALAMAT products with different names (other pack, flavour, size): a barcode cannot say which of
+  // them a card shows, so none of them is confirmed by the barcode alone.
+  const norm = (s: string) => s.toLowerCase().replace(/ё/g, "е").replace(/\s+/g, " ").trim();
+  const shared = (duplicates.get((p.article ?? "").trim()) ?? []).filter((o) => o.id !== p.id && norm(o.name) !== norm(p.name)).length;
+  const assess = (c: NctCard) => assessNctCard(p, c, shared);
   const art = classifyArticle(p.article);
   const words = queryWords(p.name);
   const base: Omit<ProductResult, "status" | "candidates" | "error"> = {
@@ -150,7 +157,7 @@ async function processProduct(p: ProductRef, nct: NctClient, maxPages: number): 
     base.requests += r.requests;
     for (const c of r.cards) if (!pool.has(c.id)) pool.set(c.id, c);
   };
-  const exactIn = () => [...pool.values()].some((c) => assessNctCard(p, c).method !== "name");
+  const exactIn = () => [...pool.values()].some((c) => assess(c).method !== "name");
   try {
     // 1. Brand / first word: shared by every product of the brand (cached), up to maxPages × 48 cards.
     const brand = await nct.search(words[0], maxPages);
@@ -159,7 +166,7 @@ async function processProduct(p: ProductRef, nct: NctClient, maxPages: number): 
     if (brand && !brand.complete && words.length > 1) add(await nct.search(words.slice(0, 3).join(" "), 1));
     // 3. Exact barcode: "<word> <GTIN>" (AND search; a bare barcode is never sent).
     if (art.kind === "gtin" && !exactIn()) {
-      const probeWords = [...(brand && !brand.complete ? [words[0]] : []), ...words.slice(1, 3)].slice(0, 2);
+      const probeWords = [...(brand && !brand.complete ? [words[0]] : []), ...words.slice(1)].filter(isSignificantWord).slice(0, 2);
       for (const w of probeWords) {
         add(await nct.search(`${w} ${base.article}`, 1));
         if (exactIn()) break;
@@ -167,7 +174,7 @@ async function processProduct(p: ProductRef, nct: NctClient, maxPages: number): 
     }
     // 4. Grade everything found; keep the best candidates.
     let ranked = [...pool.values()]
-      .map((c) => ({ c, a: assessNctCard(p, c) }))
+      .map((c) => ({ c, a: assess(c) }))
       .filter((x) => x.a.grade !== "unrelated" || x.a.method !== "name")
       .sort((x, y) => GRADE_ORDER[x.a.grade] - GRADE_ORDER[y.a.grade] || y.a.score - x.a.score)
       .slice(0, MAX_CANDIDATES);
@@ -178,7 +185,7 @@ async function processProduct(p: ProductRef, nct: NctClient, maxPages: number): 
     if (leadIndex >= 0 && !ranked[leadIndex].c.detailed) {
       const full = await nct.card(ranked[leadIndex].c.id);
       if (full) {
-        ranked[leadIndex] = { c: full, a: assessNctCard(p, full) };
+        ranked[leadIndex] = { c: full, a: assess(full) };
         base.requests += 1;
         ranked = ranked.sort((x, y) => GRADE_ORDER[x.a.grade] - GRADE_ORDER[y.a.grade] || y.a.score - x.a.score);
       }
@@ -241,6 +248,7 @@ async function run() {
     stopping = true;
   });
   const total = await reader.total();
+  const duplicates = await reader.duplicates();
   await journal({ event: "run_start", total, lastId: state.lastId, alreadyDone: done.size, intervalMs: HOST_INTERVAL_MS["nct.gov.kz"] });
   const started = Date.now();
   let processed = 0;
@@ -248,7 +256,7 @@ async function run() {
   const handle = async (p: ProductRef) => {
     const prev = done.get(p.id);
     if (!flag("force") && prev && prev.status !== "error") return;
-    const r = await processProduct(p, nct, maxPages);
+    const r = await processProduct(p, nct, maxPages, duplicates);
     await appendFile(paths.results, JSON.stringify(r) + "\n");
     done.set(p.id, r);
     processed++;
@@ -531,7 +539,39 @@ ${ex("mismatch_only", 10)}
   console.log(statuses.map((s) => `${s}: ${count(s)}`).join(", "));
 }
 
-const commands: Record<string, () => Promise<void>> = { run, report };
+// ---------------------------------------------------------------- export
+
+/**
+ * Compact copy of the manifest for the repository (data/nct/): text only — no photos. Built from products.csv,
+ * candidates.csv and permission-requests.csv of `report`, with fewer columns (all image URLs and queries stay in the
+ * work folder).
+ */
+async function exportData() {
+  await report();
+  const out = resolve(opt("out") ?? "data/nct");
+  await mkdir(out, { recursive: true });
+  const read = async (f: string) => Papa.parse<Record<string, string>>((await readFile(join(dir, f), "utf8")).replace(/^﻿/, ""), { header: true, skipEmptyLines: true }).data;
+  const pick = (rows: Record<string, string>[], cols: string[]) => "﻿" + Papa.unparse(rows.map((r) => Object.fromEntries(cols.map((c) => [c, r[c] ?? ""]))), { columns: cols });
+  await writeFile(
+    join(out, "products.csv"),
+    pick(await read("products.csv"), [
+      "product_id", "article", "name", "article_kind", "status", "photo_status", "photo_grade", "photo_nct_url", "photo_image_url", "photo_image_count",
+      "photo_manufacturer", "photo_manufacturer_bin", "best_grade", "best_match_method", "best_nct_url", "best_nct_name", "best_nct_gtin", "best_reasons",
+      "candidates", "rights_status", "review_status", "error", "checked_at",
+    ]),
+  );
+  await writeFile(
+    join(out, "candidates.csv"),
+    pick(await read("candidates.csv"), [
+      "product_id", "article", "name", "rank", "nct_id", "nct_url", "nct_name", "nct_gtin", "nct_ntin", "nct_kztin", "image_url", "image_count",
+      "manufacturer", "manufacturer_bin", "form", "dosage", "volume", "pack", "match_method", "grade", "name_coverage", "comparison", "reasons",
+    ]),
+  );
+  await writeFile(join(out, "permission-requests.csv"), (await readFile(join(dir, "permission-requests.csv"), "utf8")));
+  console.log(`Экспорт: ${out}`);
+}
+
+const commands: Record<string, () => Promise<void>> = { run, report, export: exportData };
 if (!commands[command]) {
   console.error("Команды: run | report");
   process.exit(2);

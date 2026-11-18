@@ -19,6 +19,12 @@ const CYR_TO_LAT: Record<string, string> = {
   ю: "yu", я: "ya", ә: "a", ғ: "g", қ: "k", ң: "n", ө: "o", ұ: "u", ү: "u", һ: "h", і: "i",
 };
 
+/** A word that carries meaning for search: letters, at least 3 of them, not a preposition/unit/form word. */
+export function isSignificantWord(word: string): boolean {
+  const w = word.toLowerCase().replace(/ё/g, "е");
+  return (w.match(/\p{L}/gu) ?? []).length >= 3 && !STOP.has(w);
+}
+
 /** Latin skeleton of a word so that "Бюбхен" and "Bubchen", "Алфавит" and "Alfavit" can be compared. */
 export function translit(word: string): string {
   return [...word.toLowerCase().replace(/ё/g, "е")]
@@ -39,9 +45,27 @@ export function translit(word: string): string {
     .replace(/[^a-z0-9]/g, "");
 }
 
+const LATIN_LOOKALIKE: Record<string, string> = { A: "А", B: "В", C: "С", E: "Е", H: "Н", K: "К", M: "М", O: "О", P: "Р", T: "Т", X: "Х", Y: "У", a: "а", c: "с", e: "е", o: "о", p: "р", x: "х", y: "у" };
+
+/**
+ * Latin letters typed instead of identical-looking Cyrillic ones ("BKУCOM AHAHACA" → "ВКУСОМ АНАНАСА"). Only in names
+ * written mostly in Cyrillic, and only in words that mix alphabets or consist entirely of look-alike capitals.
+ */
+export function fixHomoglyphs(name: string): string {
+  const cyr = (name.match(/\p{Script=Cyrillic}/gu) ?? []).length;
+  const lat = (name.match(/\p{Script=Latin}/gu) ?? []).length;
+  return name.replace(/[\p{L}]+/gu, (w) => {
+    // A word mixing alphabets with only look-alike Latin letters is always Cyrillic ("BKУCOM").
+    const mixed = /\p{Script=Cyrillic}/u.test(w) && /\p{Script=Latin}/u.test(w) && [...w].every((ch) => /\p{Script=Cyrillic}/u.test(ch) || ch in LATIN_LOOKALIKE);
+    // A word of look-alike capitals only ("AHAHACA") — only when the name is mostly Cyrillic.
+    const allCapsLookalike = cyr > lat && w.length >= 4 && /^[ABCEHKMOPTXY]+$/.test(w);
+    return mixed || allCapsLookalike ? [...w].map((ch) => LATIN_LOOKALIKE[ch] ?? ch).join("") : w;
+  });
+}
+
 /** Significant words: letters (or letters+digits like "b12", "d3"), without units, forms, packaging and stop words. */
 export function significantWords(name: string): string[] {
-  const words = name
+  const words = fixHomoglyphs(name)
     .toLowerCase()
     .normalize("NFC")
     .replace(/ё/g, "е")
@@ -114,6 +138,77 @@ export function manufacturerMentioned(ourName: string, manufacturer: string | nu
   const words = significantWords(manufacturer).filter((w) => !["тоо", "ао", "ооо", "зао", "оао", "ltd", "llc", "gmbh", "inc", "co", "фарм", "pharma", "компания"].includes(w));
   const ours = significantWords(ourName);
   return words.some((w) => w.length >= 4 && ours.some((o) => sameWord(o, w)));
+}
+
+// Words that name a variant of one product line. Two different words of one group (black vs green tea, raspberry vs
+// melon, herbs vs oils, adult vs child, XL vs XXL) mean two different products even when everything else matches.
+const VARIANT_GROUPS: Record<string, RegExp> = {
+  colour: /^(черн|бел(ый|ая|ое|ые|ого|ой)$|красн|зелен|син(ий|яя|ее|ие|его)$|голуб(ой|ая|ое|ые)$|розов|желт|оранжев|фиолет|золот|серебр|black$|white$|red$|green$|blue$|pink$|yellow$|purple$|gold$|silver$)/,
+  flavour: new RegExp(
+    "^(" +
+      [
+        "малин", "клубни", "землян", "вишн", "черешн", "яблок", "груш", "банан", "апельсин", "мандарин", "лимон", "лайм", "грейпфрут", "персик",
+        "абрикос", "ананас", "манго", "маракуй", "дын", "арбуз", "виноград", "черник", "голубик", "смородин", "клюкв", "брусник", "облепих",
+        "кокос", "ванил", "шоколад", "карамел", "кола$", "мят", "ментол", "ромашк", "лаванд", "жасмин", "алоэ", "медов", "имбир", "корица",
+        "эвкалипт", "огур", "хвой", "сосн", "пихт", "трав(?!м)", "масл", "пшениц", "овсян", "гречн", "рисов", "кукуруз", "тыкв", "морков",
+        "свекл", "сливоч", "творож", "йогурт", "strawberr", "raspberr", "cherr", "apple", "banana", "orange", "lemon", "lime$", "peach",
+        "apricot", "pineapple", "mango", "melon", "watermelon", "grape", "blueberr", "blackcurrant", "coconut", "vanill", "chocolat", "caramel",
+        "cola$", "mint$", "menthol", "chamomile", "lavender", "aloe", "honey", "ginger", "cinnamon", "eucalypt", "tropical", "berr",
+      ].join("|") +
+      ")",
+  ),
+  size: /^(xs|xl|xxl|xxxl|mini|midi|maxi|newborn|junior|детск|взросл|мужск|женск|подрост)$|^(детск|взросл|мужск|женск|подрост)/,
+};
+
+/** "flavour:мят" for "мята", "мяты", "мятный": the group and the stem, so that word forms of one variant are equal. */
+function variantKey(word: string): { group: string; stem: string } | null {
+  const w = word.toLowerCase().replace(/ё/g, "е");
+  for (const [group, re] of Object.entries(VARIANT_GROUPS)) {
+    const m = re.exec(w);
+    if (m) {
+      // The stem: the matched alternative without inflection (first 4 letters are enough to tell variants apart).
+      return { group, stem: m[0].replace(/(ый|ая|ое|ые|ого|ой|ий|яя|ее|ие|его)$/, "").slice(0, 5) };
+    }
+  }
+  return null;
+}
+
+// The same variant written in Russian and English is not a conflict ("черного тмина" = "black seed").
+const TRANSLATIONS: [RegExp, RegExp][] = [
+  [/^черн/, /^black$/], [/^бел/, /^white$/], [/^красн/, /^red$/], [/^зелен/, /^green$/], [/^син/, /^blue$/], [/^голуб/, /^blue$/],
+  [/^розов/, /^pink$/], [/^фиолет/, /^purple$/],
+  [/^желт/, /^yellow$/], [/^золот/, /^gold$/], [/^серебр/, /^silver$/], [/^малин/, /^raspberr/], [/^клубни/, /^strawberr/],
+  [/^вишн/, /^cherr/], [/^яблок/, /^apple/], [/^банан/, /^banana/], [/^апельсин/, /^orange/], [/^лимон/, /^lemon/],
+  [/^персик/, /^peach/], [/^ананас/, /^pineapple/], [/^манго/, /^mango/], [/^дын/, /^melon/], [/^арбуз/, /^watermelon/],
+  [/^виноград/, /^grape/], [/^черник/, /^blueberr/], [/^кокос/, /^coconut/], [/^ванил/, /^vanill/], [/^шоколад/, /^chocolat/],
+  [/^карамел/, /^caramel/], [/^кола$/, /^cola$/], [/^мят/, /^mint$/], [/^ромашк/, /^chamomile/], [/^лаванд/, /^lavender/],
+  [/^алоэ/, /^aloe/], [/^медов/, /^honey/], [/^имбир/, /^ginger/], [/^корица/, /^cinnamon/], [/^эвкалипт/, /^eucalypt/],
+  [/^ментол/, /^menthol/], [/^апельсин/, /^orange/], [/^смородин/, /^blackcurrant/],
+];
+
+function translationOf(a: string, b: string): boolean {
+  const x = a.toLowerCase().replace(/ё/g, "е");
+  const y = b.toLowerCase().replace(/ё/g, "е");
+  return TRANSLATIONS.some(([ru, en]) => (ru.test(x) && en.test(y)) || (ru.test(y) && en.test(x)));
+}
+
+/**
+ * A variant word of the SALAMAT name is absent from the candidate, and the candidate has another word of the same
+ * group instead ("черный" vs "зеленый", "травы" vs "масла"): another product of the line.
+ */
+export function variantConflict(similarity: NameSimilarity): { ours: string; theirs: string } | null {
+  const extra = similarity.extra.map((e) => ({ word: e, key: variantKey(e) }));
+  for (const m of similarity.missing) {
+    const k = variantKey(m);
+    if (!k) continue;
+    // The candidate states the same variant in another word form ("мята"/"мяты") or language ("черного"/"black").
+    if (extra.some((e) => (e.key && e.key.group === k.group && e.key.stem === k.stem) || translationOf(m, e.word))) continue;
+    const other = extra.find(
+      (e) => e.key && e.key.group === k.group && e.key.stem !== k.stem && !similarity.missing.some((x) => translationOf(x, e.word) || variantKey(x)?.stem === e.key!.stem),
+    );
+    if (other) return { ours: m, theirs: other.word };
+  }
+  return null;
 }
 
 /** The SALAMAT name's brand (its first significant word) appears in the candidate's name or manufacturer. */

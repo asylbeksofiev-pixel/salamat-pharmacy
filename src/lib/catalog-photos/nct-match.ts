@@ -12,7 +12,7 @@
 
 import { classifyArticle, sameGtin } from "./barcode";
 import { compareAttributes, describeAttributes, parseAttributes, type AttributeComparison, type PackAttributes } from "./attributes";
-import { brandConfirmed, manufacturerMentioned, nameSimilarity, type NameSimilarity } from "./similarity";
+import { brandConfirmed, manufacturerMentioned, nameSimilarity, variantConflict, type NameSimilarity } from "./similarity";
 
 export interface NctCard {
   id: number;
@@ -57,7 +57,11 @@ function cardText(card: NctCard): string {
   return `${card.name} ${card.form ?? ""}${pack}`;
 }
 
-export function assessNctCard(product: { name: string; article: string | null }, card: NctCard): NctAssessment {
+/**
+ * @param sharedArticleConflicts other SALAMAT products with the same article but different characteristics
+ *        (pharmacy_products.article is not unique): a barcode match cannot tell which of them the card shows.
+ */
+export function assessNctCard(product: { name: string; article: string | null }, card: NctCard, sharedArticleConflicts = 0): NctAssessment {
   const art = classifyArticle(product.article);
   const raw = (product.article ?? "").trim();
   const method: NctMethod =
@@ -91,6 +95,9 @@ export function assessNctCard(product: { name: string; article: string | null },
   // "в ассортименте": SALAMAT sells several flavours/colours under one article — a photo of one of them needs a person.
   const assortment = /ассорт/i.test(product.name);
   if (assortment) reasons.push("salamat_assortment");
+  if (exact && sharedArticleConflicts > 0) reasons.push(`article_shared_with_${sharedArticleConflicts}_different_products`);
+  const variant = variantConflict(similarity);
+  if (variant) reasons.push(`variant_conflict:${variant.ours}≠${variant.theirs}`);
 
   let grade: NctGrade;
   if (comparison.status === "mismatch") grade = "mismatch";
@@ -100,6 +107,10 @@ export function assessNctCard(product: { name: string; article: string | null },
   else grade = "unrelated";
   if (repack && (grade === "confirmed" || grade === "probable")) grade = "doubtful";
   if (assortment && grade === "confirmed") grade = "probable";
+  if (exact && sharedArticleConflicts > 0 && grade === "confirmed") grade = "probable";
+  // Another flavour/colour/size: found by name it is another product; with the same barcode the data contradict each
+  // other (wrong card or wrong SALAMAT name) and a person must decide.
+  if (variant) grade = exact ? (grade === "confirmed" ? "probable" : grade) : grade === "unrelated" ? grade : "mismatch";
 
   const score =
     (exact ? 100 : 0) +
