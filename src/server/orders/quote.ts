@@ -5,12 +5,20 @@ import { getSettings, type Settings } from "../settings";
 import { computeOffer, type Offer } from "@/lib/offer";
 import type { CartItemInput } from "@/lib/order-schema";
 import { pickLocalized, type Locale } from "@/lib/i18n";
+import { isCatalogId, listCatalogItemsByIds } from "../catalog-items";
 
 export type LineIssue = "price_changed" | "became_unavailable" | "rx_blocked" | "removed" | "qty_limited" | "needs_confirmation";
 
 export interface QuoteLine {
   variantId: string;
+  /**
+   * "catalog" — a product from public.pharmacy_products (id is its numeric id). Such products have no
+   * confirmed per-pharmacy price or stock yet, so the line always goes to the pharmacy "to be confirmed".
+   */
+  kind: "variant" | "catalog";
   fullName: string;
+  /** SALAMAT article of a catalogue product (never an internal id). */
+  article: string | null;
   productSlug: string | null;
   variantSlug: string | null;
   imageUrl: string | null;
@@ -56,13 +64,18 @@ export async function buildQuote(args: {
     merged.set(it.variantId, prev ? { ...prev, quantity: prev.quantity + it.quantity } : { ...it });
   }
   const items = [...merged.values()].slice(0, maxLines);
+  // Numeric ids are catalogue products (public.pharmacy_products); SKU-level variants have cuid ids.
+  const catalogIds = items.filter((i) => isCatalogId(i.variantId)).map((i) => i.variantId);
+  const variantIds = items.filter((i) => !isCatalogId(i.variantId)).map((i) => i.variantId);
 
   const pharmacy = args.pharmacyId
     ? await prisma.pharmacy.findFirst({ where: { id: args.pharmacyId, isActive: true } })
     : null;
 
+  const catalogItems = catalogIds.length ? await listCatalogItemsByIds(catalogIds) : [];
+  const catalogById = new Map(catalogItems.map((c) => [c.id, c]));
   const variants = await prisma.productVariant.findMany({
-    where: { id: { in: items.map((i) => i.variantId) } },
+    where: { id: { in: variantIds } },
     include: {
       product: { select: { slug: true, publicationStatus: true } },
       source: { select: { isDemo: true } },
@@ -73,13 +86,16 @@ export async function buildQuote(args: {
   const byId = new Map(variants.map((v) => [v.id, v]));
 
   const lines: QuoteLine[] = items.map((it) => {
+    if (isCatalogId(it.variantId)) return catalogLine(it, catalogById.get(it.variantId) ?? null, { maxQtyPerLine, policy, hasPharmacy: !!pharmacy });
     const v = byId.get(it.variantId);
     const visible =
       v && v.isActive && v.product.publicationStatus === "PUBLISHED" && (!v.source?.isDemo || env.showDemoData);
     if (!v || !visible) {
       return {
         variantId: it.variantId,
+        kind: "variant",
         fullName: v?.fullName ?? "—",
+        article: null,
         productSlug: null,
         variantSlug: null,
         imageUrl: null,
@@ -130,7 +146,9 @@ export async function buildQuote(args: {
     if (pharmacy && seen !== null && unitPriceKzt === null && !blocking) issues.push("price_changed");
     return {
       variantId: v.id,
+      kind: "variant",
       fullName: v.fullName,
+      article: null,
       productSlug: v.product.slug,
       variantSlug: v.slug,
       imageUrl: v.imageUrl,
@@ -156,5 +174,44 @@ export async function buildQuote(args: {
     hasChanges: lines.some((l) => l.issues.includes("price_changed") || l.issues.includes("removed") || l.issues.includes("became_unavailable") || l.issues.includes("qty_limited")),
     limits: { maxLines, maxQtyPerLine },
     deliveryEnabled: settings.checkout.deliveryEnabled,
+  };
+}
+
+/**
+ * A catalogue product in the cart. The catalogue has no per-pharmacy prices or stock, so the line is never
+ * priced here (even if the table gets a general price column): the pharmacy confirms price and stock by phone.
+ */
+function catalogLine(
+  it: CartItemInput,
+  item: { id: string; name: string; article: string | null; imageUrl: string | null } | null,
+  ctx: { maxQtyPerLine: number; policy: Settings["offerPolicy"]; hasPharmacy: boolean },
+): QuoteLine {
+  const quantity = Math.min(it.quantity, ctx.maxQtyPerLine);
+  const issues: LineIssue[] = it.quantity > ctx.maxQtyPerLine ? ["qty_limited"] : [];
+  if (!item) {
+    return { variantId: it.variantId, kind: "catalog", fullName: "—", article: null, productSlug: null, variantSlug: null, imageUrl: null, prescriptionStatus: "UNKNOWN", quantity, offer: null, unitPriceKzt: null, lineTotalKzt: null, issues: [...issues, "removed"], previousPriceKzt: it.seenPriceKzt ?? null, blocking: true };
+  }
+  // Prescription status is unknown for catalogue products: follow the same policy as for SKUs.
+  const rxBlocked = ctx.policy.unknownRxPolicy === "BLOCK";
+  issues.push(rxBlocked ? "rx_blocked" : "needs_confirmation");
+  const seen = it.seenPriceKzt ?? null;
+  // A price seen earlier can no longer be honoured: the visitor must see that it is now "to be confirmed".
+  if (ctx.hasPharmacy && seen !== null && !rxBlocked) issues.push("price_changed");
+  return {
+    variantId: item.id,
+    kind: "catalog",
+    fullName: item.name,
+    article: item.article,
+    productSlug: null,
+    variantSlug: null,
+    imageUrl: item.imageUrl,
+    prescriptionStatus: "UNKNOWN",
+    quantity,
+    offer: null,
+    unitPriceKzt: null,
+    lineTotalKzt: null,
+    issues,
+    previousPriceKzt: seen,
+    blocking: rxBlocked,
   };
 }

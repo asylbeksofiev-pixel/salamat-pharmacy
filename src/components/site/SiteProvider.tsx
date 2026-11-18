@@ -27,7 +27,7 @@ interface SiteContextValue {
   pharmacies: PickerPharmacy[];
   helpline: string;
   showDemo: boolean;
-  /** Online requests are possible only when SKU-level products with confirmed prices exist. */
+  /** Cart and pickup requests are available (priced SKUs, or catalogue products sent "to be confirmed"). */
   orderingEnabled: boolean;
   openPharmacyPicker: () => void;
   selectPharmacy: (id: string) => Promise<void>;

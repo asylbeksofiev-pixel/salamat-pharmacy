@@ -54,11 +54,12 @@ test("catalogue: totals, pagination, item by id, same article stays separate, no
   const page2 = await page.locator("main article").evaluateAll((els) => els.map((e) => e.getAttribute("data-item-id")));
   expect(page2).toHaveLength(24);
   expect(page1.filter((id) => page2.includes(id))).toEqual([]);
-  // No fake prices, stock or cart for products without data.
+  // No fake prices or stock for products without data; they can still go into a request "to be confirmed".
   const main = page.locator("main");
   await expect(main).not.toContainText(/\b0\s?₸/);
   await expect(main).not.toContainText("Есть в наличии");
-  await expect(main.getByRole("button", { name: "В корзину" })).toHaveCount(0);
+  await expect(main.locator("article").first()).toContainText("Цена уточняется");
+  await expect(main.getByRole("button", { name: "В корзину" })).toHaveCount(24);
   // Same article → two separate cards, each opening its own id.
   await page.goto("/catalog?q=DUP-001");
   await expect(main).toContainText("Найдено товаров: 2");
@@ -284,5 +285,45 @@ test("buttons keep working before JavaScript has loaded (slow networks)", async 
   await expect(page).toHaveURL(/\/search\?q=/);
   // Results are in the server HTML (revealed by a tiny inline script when JavaScript is on).
   expect(await page.content()).toContain("Парацетамол 500 мг №20 табл.");
+  await ctx.close();
+});
+
+test("request 'to be confirmed': catalogue product → cart → checkout → saved without a price → operator sees it", async ({ page, browser }) => {
+  await page.goto("/");
+  // Home: no search inside the hero, catalogue preview with real cards and a way into the catalogue.
+  await expect(page.locator("section").first().getByRole("search")).toHaveCount(0);
+  const catalog = page.getByRole("region", { name: "Каталог товаров" });
+  await expect(catalog.locator("article")).toHaveCount(4);
+  await expect(catalog.getByRole("link", { name: "Смотреть все товары" })).toHaveAttribute("href", "/catalog");
+  await selectPharmacy(page, /Асфендиярова/);
+  await page.goto("/catalog?q=ASP-100");
+  const card = page.locator("main article").first();
+  await card.getByRole("button", { name: "В корзину" }).click();
+  await expect(card.getByRole("link", { name: "В корзине" })).toBeVisible();
+  await page.goto("/cart");
+  await expect(page.locator("main")).toContainText("Заявка на уточнение");
+  await expect(page.locator("main")).toContainText("Артикул: ASP-100");
+  await expect(page.locator("main")).toContainText("Цену уточнит аптека");
+  await expect(page.locator("main")).not.toContainText(/\d\s₸/);
+  await page.getByRole("link", { name: "Перейти к оформлению" }).click();
+  const name = `E2E catalog ${Date.now()}`;
+  await page.getByLabel("Имя").fill(name);
+  await page.getByLabel("Телефон").fill("87011234567");
+  await page.locator("input[name=consent]").check();
+  await page.getByRole("button", { name: "Отправить заявку" }).click();
+  await page.waitForURL(/\/order\/success\/S-/);
+  expect(page.url()).not.toContain("87011234567");
+  const publicId = page.url().split("/").pop()!;
+  const saved = await db.order.findUniqueOrThrow({ where: { publicId }, include: { items: true } });
+  expect(saved.totalKzt).toBeNull();
+  expect(saved.items[0]).toMatchObject({ variantId: null, skuSnapshot: "ASP-100", unitPriceKzt: null });
+
+  const ctx = await browser.newContext();
+  const admin = await ctx.newPage();
+  const { loginAdmin } = await import("./helpers");
+  await loginAdmin(admin, "operator@salamat.local");
+  await admin.goto(`/admin/orders/${saved.id}`);
+  await expect(admin.locator("main")).toContainText("Артикул: ASP-100");
+  await expect(admin.locator("main")).toContainText("Заявка на уточнение");
   await ctx.close();
 });

@@ -13,7 +13,7 @@ export async function generateMetadata({ params }: PageProps<"/[locale]/help">) 
   if (!isLocale(locale)) return {};
   const [page, store] = await Promise.all([getPage("help", locale), getStorefrontState()]);
   const t = getDictionary(locale);
-  return pageMetadata(locale, "/help", page?.title ?? t.meta.helpTitle, store.orderingEnabled ? page?.metaDescription : t.pages.helpCallDescription);
+  return pageMetadata(locale, "/help", page?.title ?? t.meta.helpTitle, store.pricesConfirmed ? page?.metaDescription : t.pages.helpCallDescription);
 }
 
 export default async function HelpPage({ params }: PageProps<"/[locale]/help">) {
@@ -22,9 +22,9 @@ export default async function HelpPage({ params }: PageProps<"/[locale]/help">) 
   const t = getDictionary(locale);
   const [page, dbFaq, settings, store] = await Promise.all([getPage("help", locale), getFaq(locale), getSettings(), getStorefrontState()]);
   if (!page) notFound();
-  // The stored FAQ describes online requests. While requests are unavailable (no prices on the site),
-  // show answers that match the real flow — find the product, call the pharmacy.
-  const faq = store.orderingEnabled ? dbFaq : t.pages.callFaq.map((f, i) => ({ id: `call-${i}`, question: f.q, answer: f.a }));
+  // The stored FAQ describes requests with prices on the site. Until prices are confirmed, show answers that
+  // match the real flow — find the product, send a request "to be confirmed" or call the pharmacy.
+  const faq = store.pricesConfirmed ? dbFaq : t.pages.callFaq.map((f, i) => ({ id: `call-${i}`, question: f.q, answer: f.a }));
   const jsonLd = faq.length
     ? { "@context": "https://schema.org", "@type": "FAQPage", mainEntity: faq.map((f) => ({ "@type": "Question", name: f.question, acceptedAnswer: { "@type": "Answer", text: f.answer } })) }
     : null;

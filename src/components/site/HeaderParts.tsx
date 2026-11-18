@@ -113,12 +113,12 @@ export function HeaderCounters() {
       {orderingEnabled ? (
         <Link
           href={href("/cart")}
-          className="relative flex h-11 items-center gap-2 rounded-[var(--radius-md)] px-2.5 text-ink-soft hover:bg-surface hover:text-ink"
+          className="relative flex h-11 items-center gap-3.5 rounded-[var(--radius-md)] px-2.5 text-ink-soft transition-[background-color,color,scale] duration-200 hover:bg-surface hover:text-ink motion-safe:active:scale-95"
           aria-label={`${t.common.cart}${c ? `. ${fmt(t.header.cartCount, { count: c })}` : ""}`}
         >
           <span className="relative">
             <Icon name="cart" />
-            {c ? <span className="absolute -top-2 -right-2.5 grid min-w-5 place-items-center rounded-full bg-accent-500 px-1 text-[0.7rem] leading-5 font-bold text-white" aria-hidden="true">{c}</span> : null}
+            {c ? <span key={c} className="sal-favorite-badge absolute -top-2 -right-2.5 grid min-w-5 place-items-center rounded-full bg-accent-500 px-1 text-[0.7rem] leading-5 font-bold text-white" aria-hidden="true">{c}</span> : null}
           </span>
           <span className="hidden text-sm font-semibold lg:inline">{t.common.cart}</span>
         </Link>

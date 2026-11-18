@@ -11,7 +11,8 @@ import { Breadcrumbs } from "@/components/ui/Breadcrumbs";
 import { ItemPrice, ItemStock, PhotoCredit } from "@/components/catalog/CatalogItems";
 import { ProductImage } from "@/components/catalog/ProductImage";
 import { PharmacyChip } from "@/components/site/HeaderParts";
-import { FavoriteButton } from "@/components/catalog/OfferActions";
+import { CatalogCartButton, FavoriteButton } from "@/components/catalog/OfferActions";
+import { getStorefrontState } from "@/server/storefront";
 import { Icon } from "@/components/icons";
 
 export async function generateMetadata({ params }: PageProps<"/[locale]/catalog/item/[id]">) {
@@ -28,7 +29,7 @@ export default async function CatalogItemPage({ params }: PageProps<"/[locale]/c
   const { locale, id } = await params;
   if (!isLocale(locale) || !isCatalogId(id)) notFound();
   const t = getDictionary(locale);
-  const [item, pharmacy, settings] = await Promise.all([getCatalogItem(id), getSelectedPharmacy(locale), getSettings()]);
+  const [item, pharmacy, settings, store] = await Promise.all([getCatalogItem(id), getSelectedPharmacy(locale), getSettings(), getStorefrontState()]);
   if (!item) notFound();
   const href = (p: string) => localizedPath(locale, p);
   // A selected pharmacy without a known phone falls back to the helpline, and says so.
@@ -48,7 +49,7 @@ export default async function CatalogItemPage({ params }: PageProps<"/[locale]/c
         <div className="hidden self-start md:block">
           {item.imageUrl ? (
             <>
-              <ProductImage src={item.imageUrl} alt={item.name} noImageLabel={t.product.noImage} className="rounded-[var(--radius-2xl)] border border-line" priority sizes="40vw" />
+              <ProductImage src={item.imageUrl} alt={item.name} noImageLabel={t.product.noImage} radius="rounded-[var(--radius-2xl)]" className="border border-line" priority sizes="40vw" />
               <PhotoCredit item={item} t={t} className="mt-2" />
             </>
           ) : (
@@ -64,7 +65,7 @@ export default async function CatalogItemPage({ params }: PageProps<"/[locale]/c
           <section aria-labelledby="item-title" className="rounded-[var(--radius-2xl)] border border-line bg-white p-4 sm:p-5">
             {item.imageUrl ? (
               <div className="mx-auto mb-4 w-full max-w-[14rem] md:hidden">
-                <ProductImage src={item.imageUrl} alt={item.name} noImageLabel={t.product.noImage} className="rounded-[var(--radius-xl)] border border-line" priority sizes="60vw" />
+                <ProductImage src={item.imageUrl} alt={item.name} noImageLabel={t.product.noImage} radius="rounded-[var(--radius-xl)]" className="border border-line" priority sizes="60vw" />
                 <PhotoCredit item={item} t={t} className="mt-1.5 text-center" />
               </div>
             ) : null}
@@ -110,14 +111,23 @@ export default async function CatalogItemPage({ params }: PageProps<"/[locale]/c
               </p>
             )}
 
-            <a
-              href={telHref(phone)}
-              aria-label={`${callLabel}: ${formatPhone(phone)}`}
-              className="press mt-4 flex h-12 w-full items-center justify-center gap-2 rounded-[var(--radius-md)] bg-brand-600 px-4 font-semibold text-white hover:bg-brand-700 focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-brand-600 sm:inline-flex sm:w-auto"
-            >
-              <Icon name="phone" size={18} />
-              {callLabel}
-            </a>
+            {/* Main action: put the product into a request "to be confirmed"; calling stays as the alternative. */}
+            <div className="mt-4 flex flex-col gap-2.5 sm:flex-row sm:flex-wrap">
+              {store.orderingEnabled ? <CatalogCartButton id={item.id} name={item.name} size="lg" className="sm:w-auto sm:min-w-56" /> : null}
+              <a
+                href={telHref(phone)}
+                aria-label={`${callLabel}: ${formatPhone(phone)}`}
+                className={
+                  store.orderingEnabled
+                    ? "press flex h-13 w-full items-center justify-center gap-2 rounded-[var(--radius-md)] border border-line-strong bg-white px-5 font-semibold text-ink hover:border-brand-600 hover:text-brand-700 focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-brand-600 sm:w-auto"
+                    : "press flex h-12 w-full items-center justify-center gap-2 rounded-[var(--radius-md)] bg-brand-600 px-4 font-semibold text-white hover:bg-brand-700 focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-brand-600 sm:inline-flex sm:w-auto"
+                }
+              >
+                <Icon name="phone" size={18} />
+                {callLabel}
+              </a>
+            </div>
+            {store.orderingEnabled ? <p className="mt-2.5 text-sm text-muted">{t.request.itemHint}</p> : null}
           </section>
 
           {/* Where to ask: the pharmacy (or helpline) to call. */}
