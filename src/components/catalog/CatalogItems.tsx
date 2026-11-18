@@ -12,6 +12,7 @@ import { ButtonLink } from "../ui/Button";
 import { Icon } from "../icons";
 import { CatalogSearchForm } from "./CatalogSearchForm";
 import { FavoriteButton } from "./OfferActions";
+import { catalogPhotoSources } from "./ProductImage";
 
 export function catalogItemHref(locale: Locale, id: string) {
   return localizedPath(locale, `/catalog/item/${id}`);
@@ -40,26 +41,36 @@ export function ItemStock({ item, t, size = "md" }: { item: CatalogItem; t: Dict
   );
 }
 
-/** Attribution for photos found in open databases (their CC BY-SA licence requires it). */
+/** Credit line for photos whose licence asks for it (e.g. CC BY-SA: author, licence, link to the source). */
 export function PhotoCredit({ item, t, className }: { item: CatalogItem; t: Dictionary; className?: string }) {
   if (!item.imageCredit) return null;
+  const credit = item.imageCredit;
+  const href = /^https:\/\//.test(credit.url) ? credit.url : null;
   return (
     <p className={`text-[0.72rem] leading-snug text-muted ${className ?? ""}`}>
       {t.items.photoCredit}{" "}
-      <a href={item.imageCredit.url} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-brand-700">
-        {item.imageCredit.source}
-      </a>
-      , {item.imageCredit.license}. {t.items.packagingMayDiffer}
+      {href ? (
+        <a href={href} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-brand-700">
+          {credit.attribution ?? credit.source}
+        </a>
+      ) : (
+        (credit.attribution ?? credit.source)
+      )}
+      , {credit.license}. {t.items.packagingMayDiffer}
     </p>
   );
 }
 
 function ItemThumb({ item, t }: { item: CatalogItem; t: Dictionary }) {
   if (item.imageUrl) {
+    // Lazy: only thumbnails scrolled into view are downloaded; the 400 px variant is enough for a 56 px slot.
+    const v = catalogPhotoSources(item.imageUrl);
     return (
       <div className="relative size-14 shrink-0 overflow-hidden rounded-[var(--radius-md)] border border-line bg-white">
-        {/* eslint-disable-next-line @next/next/no-img-element -- hosts of future product photos are not known yet */}
-        <img src={item.imageUrl} alt="" loading="lazy" decoding="async" className="absolute inset-0 size-full object-contain p-1" referrerPolicy="no-referrer" />
+        <picture>
+          {v ? <source type="image/avif" srcSet={v.avif} sizes="56px" /> : null}
+          <img src={v?.fallback ?? item.imageUrl} srcSet={v?.webp} sizes={v ? "56px" : undefined} alt="" width={56} height={56} loading="lazy" decoding="async" className="absolute inset-0 size-full object-contain p-1" referrerPolicy="no-referrer" />
+        </picture>
       </div>
     );
   }

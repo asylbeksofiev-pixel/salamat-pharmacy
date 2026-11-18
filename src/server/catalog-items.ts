@@ -20,8 +20,8 @@ export interface CatalogItem {
   stockQuantity: number | null;
   category: string | null;
   imageUrl: string | null;
-  /** Where the photo comes from, when it is not SALAMAT's own (required by the photo's licence). */
-  imageCredit: { source: string; url: string; license: string } | null;
+  /** Where the photo comes from, when its licence or permission asks for credit (e.g. CC BY-SA). */
+  imageCredit: { source: string; url: string; license: string; attribution: string | null } | null;
 }
 
 export interface CatalogPage {
@@ -36,9 +36,14 @@ export interface CatalogPage {
 }
 
 const TABLE = Prisma.raw(`"public"."pharmacy_products"`);
-// Photos found by barcode (prisma: CatalogImage). Joined, never written into pharmacy_products.
-const FROM_WITH_PHOTOS = Prisma.raw(`"public"."pharmacy_products" LEFT JOIN "public"."catalog_images" ci ON ci."barcode" = btrim("article")`);
-const PHOTO_COLUMNS = Prisma.raw(`ci."photo_url" AS "photoUrl", ci."photo_source" AS "photoSource", ci."photo_source_url" AS "photoSourceUrl", ci."photo_license" AS "photoLicense"`);
+// Reviewed product photos (prisma: CatalogImage), bound to the unique product id — never to the article, which repeats.
+// Joined, never written into pharmacy_products. Only rows approved for publication are shown.
+const FROM_WITH_PHOTOS = Prisma.raw(
+  `"public"."pharmacy_products" LEFT JOIN "public"."catalog_images" ci ON ci."product_id" = "pharmacy_products"."id" AND ci."review_status" = 'approved'`,
+);
+const PHOTO_COLUMNS = Prisma.raw(
+  `ci."photo_url" AS "photoUrl", ci."photo_source" AS "photoSource", ci."photo_source_url" AS "photoSourceUrl", ci."photo_license" AS "photoLicense", ci."attribution" AS "photoAttribution"`,
+);
 
 /**
  * Columns that will be added later. They are used only if they exist in the table, so adding them
@@ -67,7 +72,7 @@ async function optionalColumns(): Promise<OptionalColumn[]> {
 }
 
 function selectList(columns: OptionalColumn[]) {
-  return Prisma.join([Prisma.sql`"id"::text AS "id"`, Prisma.sql`"article"`, Prisma.sql`"name"`, ...columns.map((c) => OPTIONAL_COLUMNS[c]), PHOTO_COLUMNS], ", ");
+  return Prisma.join([Prisma.sql`"pharmacy_products"."id"::text AS "id"`, Prisma.sql`"article"`, Prisma.sql`"name"`, ...columns.map((c) => OPTIONAL_COLUMNS[c]), PHOTO_COLUMNS], ", ");
 }
 
 interface Row {
@@ -82,6 +87,7 @@ interface Row {
   photoSource?: string | null;
   photoSourceUrl?: string | null;
   photoLicense?: string | null;
+  photoAttribution?: string | null;
 }
 
 const isHttps = (u: string | null | undefined): u is string => !!u && /^https:\/\//.test(u);
@@ -91,7 +97,8 @@ function toItem(r: Row): CatalogItem {
   const stock = typeof r.stockQuantity === "number" && Number.isInteger(r.stockQuantity) && r.stockQuantity >= 0 ? r.stockQuantity : null;
   // SALAMAT's own photo (future image_url column) wins over a photo found by barcode.
   const own = isHttps(r.imageUrl) ? r.imageUrl : null;
-  const found = !own && isHttps(r.photoUrl) && r.photoSource && isHttps(r.photoSourceUrl) && r.photoLicense ? r.photoUrl : null;
+  // A photo is shown only with its source and licence/permission on record (SALAMAT's own files have no public source page).
+  const found = !own && isHttps(r.photoUrl) && r.photoSource && r.photoSourceUrl && r.photoLicense ? r.photoUrl : null;
   const image = own ?? found;
   return {
     id: r.id,
@@ -101,7 +108,8 @@ function toItem(r: Row): CatalogItem {
     stockQuantity: stock,
     category: r.category?.trim() || null,
     imageUrl: image,
-    imageCredit: found ? { source: r.photoSource!, url: r.photoSourceUrl!, license: r.photoLicense! } : null,
+    // SALAMAT's own photos need no credit line; open-licence photos carry their attribution.
+    imageCredit: found && r.photoAttribution?.trim() ? { source: r.photoSource!, url: r.photoSourceUrl!, license: r.photoLicense!, attribution: r.photoAttribution.trim() } : null,
   };
 }
 

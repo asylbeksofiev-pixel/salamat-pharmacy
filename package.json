@@ -20,7 +20,8 @@
     "orders:anonymize": "tsx --conditions=react-server scripts/anonymize-orders.ts",
     "templates:build": "tsx scripts/make-templates.ts",
     "postinstall": "prisma generate",
-    "db:catalog-fixture": "node scripts/catalog-fixture.mjs"
+    "db:catalog-fixture": "node scripts/catalog-fixture.mjs",
+    "photos": "tsx scripts/catalog-photos/run.ts"
   },
   "dependencies": {
     "@fontsource-variable/onest": "^5.3.1",
@@ -47,8 +48,10 @@
     "@types/papaparse": "^5.5.2",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@vercel/blob": "^2.9.0",
     "eslint": "^9",
     "eslint-config-next": "16.4.6",
+    "sharp": "^0.35.5",
     "tailwindcss": "4.3.3",
     "tsx": "^4.23.15",
     "typescript": "^5",

@@ -87,8 +87,8 @@ npm run db:demo
 |---|---|---|
 | `npm run typecheck` | TypeScript | без ошибок |
 | `npm run lint` | ESLint (next/core-web-vitals, react-hooks) | 0 ошибок, 0 предупреждений |
-| `npm test` | Vitest: модульные и интеграционные тесты на PostgreSQL (`salamat_test`) | 75/75 |
-| `npm run test:e2e` | Playwright на production-сборке с демо-данными (`salamat_e2e_test`, порт 3100): сценарии + 9 проверок axe-core (WCAG 2.1 AA) | 25/25 |
+| `npm test` | Vitest: модульные и интеграционные тесты на PostgreSQL (`salamat_test`) | 102/102 |
+| `npm run test:e2e` | Playwright на production-сборке с демо-данными (`salamat_e2e_test`, порт 3100): сценарии + 9 проверок axe-core (WCAG 2.1 AA) | 27/27 |
 | `npm run build` | production-сборка | успешно |
 
 Тестовые базы пересоздаются при каждом запуске; скрипты отказываются трогать базу, в имени которой нет `test`.
@@ -104,6 +104,7 @@ npm run db:demo
 | `npm run orders:anonymize` | обезличивание контактов в старых заявках по сроку хранения |
 | `npm run templates:build` | пересоздать шаблоны импорта `data/templates/*` |
 | `npm run db:migrate:dev` | создать новую миграцию после изменения `prisma/schema.prisma` |
+| `npm run photos -- process \| report \| publish` | поиск, проверка и публикация фото товаров в Vercel Blob (`docs/catalog-photos.md`) |
 
 ## Структура
 
@@ -129,6 +130,8 @@ docs/                аудит источников, дизайн-систем�
 * `docs/design-system.md` — цвета, типографика, компоненты, состояния
 * `docs/architecture.md` — слои, модель данных, безопасность, SEO, развёртывание
 * `docs/catalog-products.md` — каталог из таблицы `pharmacy_products`: API, поиск, индексы, будущие столбцы
+* `docs/catalog-photos.md` — фото товаров: источники и права (НКТ, Open Food Facts), правила сопоставления, Blob, стоимость
+* `docs/catalog-photos-dry-run.md` — пробный прогон на 40 товарах production
 * `docs/data-import.md` — формат файла, правила сопоставления, API учётной системы
 * `docs/launch-checklist.md` — что нужно для запуска и результаты проверок
 

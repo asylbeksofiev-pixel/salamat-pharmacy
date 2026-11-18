@@ -48,3 +48,6 @@ next-env.d.ts
 /e2e/.auth
 # keep the example env file
 !.env.example
+
+# product photo pipeline: downloaded originals, variants, journal (never committed)
+/.photo-work

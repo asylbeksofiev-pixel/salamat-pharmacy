@@ -110,23 +110,46 @@ describe("catalogue from public.pharmacy_products", () => {
     expect(await listCatalogItemsByIds(["0", "-5", "x"])).toEqual([]);
   });
 
-  it("shows a photo found by barcode with its credit, without touching pharmacy_products", async () => {
+  it("shows an approved photo bound to the product id, with its credit, without touching pharmacy_products", async () => {
     const [item] = (await listCatalogItems({ q: "ASP-100", pageSize: 1 })).items;
     expect(item.imageUrl).toBeNull();
-    await prisma.catalogImage.create({
-      data: { barcode: "ASP-100", photoUrl: "https://images.example.org/asp.jpg", photoSource: "Open Food Facts", photoSourceUrl: "https://world.openfoodfacts.org/product/ASP-100", photoLicense: "CC BY-SA 3.0" },
-    });
+    const url = "https://abc123.public.blob.vercel-storage.com/catalog/products/1/v1-800.webp";
+    const base = { photoUrl: url, photoSource: "Open Food Facts", photoSourceUrl: "https://world.openfoodfacts.org/product/ASP-100", photoLicense: "CC BY-SA 3.0" };
+    // Not reviewed yet: hidden.
+    await prisma.catalogImage.create({ data: { ...base, productId: BigInt(item.id), barcode: "ASP-100", attribution: "Open Food Facts contributors" } });
     try {
+      expect((await getCatalogItem(item.id))?.imageUrl).toBeNull();
+      await prisma.catalogImage.update({ where: { productId: BigInt(item.id) }, data: { reviewStatus: "approved" } });
       const again = await getCatalogItem(item.id);
-      expect(again?.imageUrl).toBe("https://images.example.org/asp.jpg");
-      expect(again?.imageCredit).toEqual({ source: "Open Food Facts", url: "https://world.openfoodfacts.org/product/ASP-100", license: "CC BY-SA 3.0" });
+      expect(again?.imageUrl).toBe(url);
+      expect(again?.imageCredit).toEqual({ source: "Open Food Facts", url: "https://world.openfoodfacts.org/product/ASP-100", license: "CC BY-SA 3.0", attribution: "Open Food Facts contributors" });
       const [listed] = (await listCatalogItems({ q: "ASP-100", pageSize: 1 })).items;
-      expect(listed.imageUrl).toBe("https://images.example.org/asp.jpg");
+      expect(listed.imageUrl).toBe(url);
+      // SALAMAT's own photo: no credit line required.
+      await prisma.catalogImage.update({ where: { productId: BigInt(item.id) }, data: { attribution: null } });
+      expect((await getCatalogItem(item.id))?.imageCredit).toBeNull();
       // A non-https photo is never shown.
-      await prisma.catalogImage.update({ where: { barcode: "ASP-100" }, data: { photoUrl: "http://images.example.org/asp.jpg" } });
+      await prisma.catalogImage.update({ where: { productId: BigInt(item.id) }, data: { photoUrl: "http://images.example.org/asp.jpg" } });
       expect((await getCatalogItem(item.id))?.imageUrl).toBeNull();
     } finally {
-      await prisma.catalogImage.delete({ where: { barcode: "ASP-100" } });
+      await prisma.catalogImage.delete({ where: { productId: BigInt(item.id) } });
+    }
+  });
+
+  it("never shows one product's photo on another product with the same article", async () => {
+    const twins = (await listCatalogItems({ q: "DUP-001", pageSize: 10 })).items;
+    expect(twins).toHaveLength(2);
+    const [a, b] = twins;
+    const url = "https://abc123.public.blob.vercel-storage.com/catalog/products/2/v1-800.webp";
+    await prisma.catalogImage.create({
+      data: { productId: BigInt(a.id), barcode: "DUP-001", photoUrl: url, photoSource: "SALAMAT", photoSourceUrl: "https://salamat.example/photos", photoLicense: "Фото SALAMAT", reviewStatus: "approved" },
+    });
+    try {
+      const after = new Map((await listCatalogItems({ q: "DUP-001", pageSize: 10 })).items.map((i) => [i.id, i.imageUrl]));
+      expect(after.get(a.id)).toBe(url);
+      expect(after.get(b.id)).toBeNull();
+    } finally {
+      await prisma.catalogImage.delete({ where: { productId: BigInt(a.id) } });
     }
   });
 });

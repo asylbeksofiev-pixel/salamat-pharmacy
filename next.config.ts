@@ -34,7 +34,12 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   poweredByHeader: false,
   images: {
-    remotePatterns: imageHosts.map((hostname) => ({ protocol: "https" as const, hostname })),
+    remotePatterns: [
+      // Product photos in the public Vercel Blob store (catalog/products/<id>/v<n>-<w>.<webp|avif>). They are published
+      // pre-sized and rendered with <picture> without on-demand optimisation; the pattern keeps next/image usable for them.
+      { protocol: "https" as const, hostname: "*.public.blob.vercel-storage.com", pathname: "/catalog/**", search: "" },
+      ...imageHosts.map((hostname) => ({ protocol: "https" as const, hostname })),
+    ],
   },
   serverExternalPackages: ["exceljs", "nodemailer"],
   experimental: {

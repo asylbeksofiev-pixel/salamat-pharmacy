@@ -585,17 +585,29 @@ model RateLimitBucket {
   count       Int
 }
 
-/// Product photos found by barcode in open databases (Open Food Facts family, CC BY-SA).
-/// Matched to public.pharmacy_products by article = barcode; the imported catalogue table itself is never modified.
-/// Column names are prefixed so they never clash with optional columns of pharmacy_products (e.g. image_url).
+/// Product photos, one per product of public.pharmacy_products (keyed by its unique id; article is not unique).
+/// Files live in Vercel Blob (catalog/products/<id>/v<version>-<400|800>.<webp|avif>); only URLs and metadata are stored here.
+/// Rows are written by `npm run photos -- publish` after rights and matching were checked; the site shows only 'approved'.
+/// The imported catalogue table itself is never modified. See docs/catalog-photos.md.
 model CatalogImage {
-  barcode        String   @id
-  photoUrl       String   @map("photo_url")
-  photoSource    String   @map("photo_source")
-  photoSourceUrl String   @map("photo_source_url")
-  photoLicense   String   @map("photo_license")
-  sourceName     String?  @map("source_name")
-  createdAt      DateTime @default(now()) @map("created_at")
+  productId      BigInt    @id @map("product_id")
+  barcode        String?
+  photoUrl       String    @map("photo_url") // 800 px WebP; 400 px and AVIF variants share the name prefix
+  photoSource    String    @map("photo_source")
+  photoSourceUrl String    @map("photo_source_url")
+  photoLicense   String    @map("photo_license")
+  attribution    String?
+  sourceName     String?   @map("source_name")
+  reviewStatus   String    @default("needs_review") @map("review_status") // approved | needs_review | rejected
+  matchMethod    String?   @map("match_method")
+  confidence     Float?    @db.Real
+  imageVersion   Int       @default(1) @map("image_version")
+  imageSha256    String?   @map("image_sha256")
+  imageWidth     Int?      @map("image_width")
+  imageHeight    Int?      @map("image_height")
+  checkedAt      DateTime? @map("checked_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
 
+  @@index([barcode])
   @@map("catalog_images")
 }
