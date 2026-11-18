@@ -20,6 +20,8 @@ export interface CatalogItem {
   stockQuantity: number | null;
   category: string | null;
   imageUrl: string | null;
+  /** Where the photo comes from, when it is not SALAMAT's own (required by the photo's licence). */
+  imageCredit: { source: string; url: string; license: string } | null;
 }
 
 export interface CatalogPage {
@@ -34,6 +36,9 @@ export interface CatalogPage {
 }
 
 const TABLE = Prisma.raw(`"public"."pharmacy_products"`);
+// Photos found by barcode (prisma: CatalogImage). Joined, never written into pharmacy_products.
+const FROM_WITH_PHOTOS = Prisma.raw(`"public"."pharmacy_products" LEFT JOIN "public"."catalog_images" ci ON ci."barcode" = btrim("article")`);
+const PHOTO_COLUMNS = Prisma.raw(`ci."photo_url" AS "photoUrl", ci."photo_source" AS "photoSource", ci."photo_source_url" AS "photoSourceUrl", ci."photo_license" AS "photoLicense"`);
 
 /**
  * Columns that will be added later. They are used only if they exist in the table, so adding them
@@ -62,7 +67,7 @@ async function optionalColumns(): Promise<OptionalColumn[]> {
 }
 
 function selectList(columns: OptionalColumn[]) {
-  return Prisma.join([Prisma.sql`"id"::text AS "id"`, Prisma.sql`"article"`, Prisma.sql`"name"`, ...columns.map((c) => OPTIONAL_COLUMNS[c])], ", ");
+  return Prisma.join([Prisma.sql`"id"::text AS "id"`, Prisma.sql`"article"`, Prisma.sql`"name"`, ...columns.map((c) => OPTIONAL_COLUMNS[c]), PHOTO_COLUMNS], ", ");
 }
 
 interface Row {
@@ -73,12 +78,21 @@ interface Row {
   stockQuantity?: number | null;
   category?: string | null;
   imageUrl?: string | null;
+  photoUrl?: string | null;
+  photoSource?: string | null;
+  photoSourceUrl?: string | null;
+  photoLicense?: string | null;
 }
+
+const isHttps = (u: string | null | undefined): u is string => !!u && /^https:\/\//.test(u);
 
 function toItem(r: Row): CatalogItem {
   const price = typeof r.price === "number" && Number.isFinite(r.price) && r.price > 0 ? r.price : null;
   const stock = typeof r.stockQuantity === "number" && Number.isInteger(r.stockQuantity) && r.stockQuantity >= 0 ? r.stockQuantity : null;
-  const image = r.imageUrl && /^https:\/\//.test(r.imageUrl) ? r.imageUrl : null;
+  // SALAMAT's own photo (future image_url column) wins over a photo found by barcode.
+  const own = isHttps(r.imageUrl) ? r.imageUrl : null;
+  const found = !own && isHttps(r.photoUrl) && r.photoSource && isHttps(r.photoSourceUrl) && r.photoLicense ? r.photoUrl : null;
+  const image = own ?? found;
   return {
     id: r.id,
     article: r.article?.trim() || null,
@@ -87,6 +101,7 @@ function toItem(r: Row): CatalogItem {
     stockQuantity: stock,
     category: r.category?.trim() || null,
     imageUrl: image,
+    imageCredit: found ? { source: r.photoSource!, url: r.photoSourceUrl!, license: r.photoLicense! } : null,
   };
 }
 
@@ -148,7 +163,7 @@ export async function listCatalogItems(opts: { q?: string | null; page?: number;
     const where = whereFor(tokens);
     const [countRows, rows] = await Promise.all([
       prisma.$queryRaw<{ total: bigint }[]>`SELECT COUNT(*) AS total FROM ${TABLE} WHERE ${where}`,
-      prisma.$queryRaw<Row[]>`SELECT ${select} FROM ${TABLE} WHERE ${where}
+      prisma.$queryRaw<Row[]>`SELECT ${select} FROM ${FROM_WITH_PHOTOS} WHERE ${where}
         ORDER BY ${orderFor(tokens)} LIMIT ${pageSize} OFFSET ${(page - 1) * pageSize}`,
     ]);
     return { total: Number(countRows[0]?.total ?? 0), rows };
@@ -188,7 +203,7 @@ export function isCatalogId(value: unknown): value is string {
 export async function getCatalogItem(id: string): Promise<CatalogItem | null> {
   if (!isCatalogId(id)) return null;
   const columns = await optionalColumns();
-  const rows = await prisma.$queryRaw<Row[]>`SELECT ${selectList(columns)} FROM ${TABLE} WHERE "id" = ${BigInt(id)} LIMIT 1`;
+  const rows = await prisma.$queryRaw<Row[]>`SELECT ${selectList(columns)} FROM ${FROM_WITH_PHOTOS} WHERE "id" = ${BigInt(id)} LIMIT 1`;
   return rows[0] ? toItem(rows[0]) : null;
 }
 
@@ -197,7 +212,7 @@ export async function listCatalogItemsByIds(ids: string[]): Promise<CatalogItem[
   const valid = Array.from(new Set(ids.filter(isCatalogId))).slice(0, 100);
   if (!valid.length) return [];
   const columns = await optionalColumns();
-  const rows = await prisma.$queryRaw<Row[]>`SELECT ${selectList(columns)} FROM ${TABLE} WHERE "id" IN (${Prisma.join(valid.map((id) => BigInt(id)))})`;
+  const rows = await prisma.$queryRaw<Row[]>`SELECT ${selectList(columns)} FROM ${FROM_WITH_PHOTOS} WHERE "id" IN (${Prisma.join(valid.map((id) => BigInt(id)))})`;
   const byId = new Map(rows.map((r) => [r.id, toItem(r)]));
   return valid.map((id) => byId.get(id)).filter((x): x is CatalogItem => !!x);
 }

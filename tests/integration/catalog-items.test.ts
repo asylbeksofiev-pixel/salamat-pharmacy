@@ -109,4 +109,24 @@ describe("catalogue from public.pharmacy_products", () => {
     expect(await listCatalogItemsByIds([])).toEqual([]);
     expect(await listCatalogItemsByIds(["0", "-5", "x"])).toEqual([]);
   });
+
+  it("shows a photo found by barcode with its credit, without touching pharmacy_products", async () => {
+    const [item] = (await listCatalogItems({ q: "ASP-100", pageSize: 1 })).items;
+    expect(item.imageUrl).toBeNull();
+    await prisma.catalogImage.create({
+      data: { barcode: "ASP-100", photoUrl: "https://images.example.org/asp.jpg", photoSource: "Open Food Facts", photoSourceUrl: "https://world.openfoodfacts.org/product/ASP-100", photoLicense: "CC BY-SA 3.0" },
+    });
+    try {
+      const again = await getCatalogItem(item.id);
+      expect(again?.imageUrl).toBe("https://images.example.org/asp.jpg");
+      expect(again?.imageCredit).toEqual({ source: "Open Food Facts", url: "https://world.openfoodfacts.org/product/ASP-100", license: "CC BY-SA 3.0" });
+      const [listed] = (await listCatalogItems({ q: "ASP-100", pageSize: 1 })).items;
+      expect(listed.imageUrl).toBe("https://images.example.org/asp.jpg");
+      // A non-https photo is never shown.
+      await prisma.catalogImage.update({ where: { barcode: "ASP-100" }, data: { photoUrl: "http://images.example.org/asp.jpg" } });
+      expect((await getCatalogItem(item.id))?.imageUrl).toBeNull();
+    } finally {
+      await prisma.catalogImage.delete({ where: { barcode: "ASP-100" } });
+    }
+  });
 });

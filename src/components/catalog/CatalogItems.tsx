@@ -39,6 +39,20 @@ export function ItemStock({ item, t, size = "md" }: { item: CatalogItem; t: Dict
   );
 }
 
+/** Attribution for photos found in open databases (their CC BY-SA licence requires it). */
+export function PhotoCredit({ item, t, className }: { item: CatalogItem; t: Dictionary; className?: string }) {
+  if (!item.imageCredit) return null;
+  return (
+    <p className={`text-[0.72rem] leading-snug text-muted ${className ?? ""}`}>
+      {t.items.photoCredit}{" "}
+      <a href={item.imageCredit.url} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-brand-700">
+        {item.imageCredit.source}
+      </a>
+      , {item.imageCredit.license}. {t.items.packagingMayDiffer}
+    </p>
+  );
+}
+
 function ItemThumb({ item, t }: { item: CatalogItem; t: Dictionary }) {
   if (item.imageUrl) {
     return (

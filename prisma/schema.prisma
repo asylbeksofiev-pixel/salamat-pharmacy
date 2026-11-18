@@ -584,3 +584,18 @@ model RateLimitBucket {
   windowStart DateTime
   count       Int
 }
+
+/// Product photos found by barcode in open databases (Open Food Facts family, CC BY-SA).
+/// Matched to public.pharmacy_products by article = barcode; the imported catalogue table itself is never modified.
+/// Column names are prefixed so they never clash with optional columns of pharmacy_products (e.g. image_url).
+model CatalogImage {
+  barcode        String   @id
+  photoUrl       String   @map("photo_url")
+  photoSource    String   @map("photo_source")
+  photoSourceUrl String   @map("photo_source_url")
+  photoLicense   String   @map("photo_license")
+  sourceName     String?  @map("source_name")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@map("catalog_images")
+}

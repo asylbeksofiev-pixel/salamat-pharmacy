@@ -167,6 +167,8 @@ const kk: Dictionary = {
     priceStockUnknown: "Бағасы мен бар-жоғы — дәріхана телефоны арқылы",
     noPhoneSelected: "Таңдалған дәріхананың телефоны әзірге нақтылануда — анықтама қызметіне қоңырау шалыңыз.",
     categoryLabel: "Бөлім",
+    photoCredit: "Фото:",
+    packagingMayDiffer: "Қаптамасы өзгеше болуы мүмкін.",
     stockLabel: "Бар-жоғы",
     article: "Артикул",
     searchLabel: "Атауы немесе артикулы бойынша іздеу",

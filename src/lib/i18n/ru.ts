@@ -162,6 +162,8 @@ const ru = {
     priceStockUnknown: "Цена и наличие — по телефону аптеки",
     noPhoneSelected: "У выбранной аптеки телефон пока уточняется — позвоните в справочную.",
     categoryLabel: "Раздел",
+    photoCredit: "Фото:",
+    packagingMayDiffer: "Упаковка может отличаться.",
     stockLabel: "Наличие",
     article: "Артикул",
     searchLabel: "Поиск по названию или артикулу",

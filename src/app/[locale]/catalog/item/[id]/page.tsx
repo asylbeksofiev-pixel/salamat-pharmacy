@@ -8,7 +8,7 @@ import { getSettings } from "@/server/settings";
 import { pageMetadata } from "@/server/seo";
 import { env } from "@/server/env";
 import { Breadcrumbs } from "@/components/ui/Breadcrumbs";
-import { ItemPrice, ItemStock } from "@/components/catalog/CatalogItems";
+import { ItemPrice, ItemStock, PhotoCredit } from "@/components/catalog/CatalogItems";
 import { ProductImage } from "@/components/catalog/ProductImage";
 import { PharmacyChip } from "@/components/site/HeaderParts";
 import { FavoriteButton } from "@/components/catalog/OfferActions";
@@ -47,7 +47,10 @@ export default async function CatalogItemPage({ params }: PageProps<"/[locale]/c
         {/* Photo column on tablets and desktops; on phones the photo sits inside the main block. */}
         <div className="hidden self-start md:block">
           {item.imageUrl ? (
-            <ProductImage src={item.imageUrl} alt={item.name} noImageLabel={t.product.noImage} className="rounded-[var(--radius-2xl)] border border-line" priority sizes="40vw" />
+            <>
+              <ProductImage src={item.imageUrl} alt={item.name} noImageLabel={t.product.noImage} className="rounded-[var(--radius-2xl)] border border-line" priority sizes="40vw" />
+              <PhotoCredit item={item} t={t} className="mt-2" />
+            </>
           ) : (
             <div className="flex h-56 flex-col items-center justify-center gap-1.5 rounded-[var(--radius-2xl)] border border-line bg-gradient-to-br from-surface to-brand-50/60 text-brand-300" role="img" aria-label={`${item.name}. ${t.product.noImage}`}>
               <Icon name="box" size={34} strokeWidth={1.3} />
@@ -62,6 +65,7 @@ export default async function CatalogItemPage({ params }: PageProps<"/[locale]/c
             {item.imageUrl ? (
               <div className="mx-auto mb-4 w-full max-w-[14rem] md:hidden">
                 <ProductImage src={item.imageUrl} alt={item.name} noImageLabel={t.product.noImage} className="rounded-[var(--radius-xl)] border border-line" priority sizes="60vw" />
+                <PhotoCredit item={item} t={t} className="mt-1.5 text-center" />
               </div>
             ) : null}
             <div className="flex items-start gap-3">
