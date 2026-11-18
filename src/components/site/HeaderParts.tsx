@@ -106,9 +106,9 @@ export function HeaderCounters() {
   const f = hydrated ? favs : 0;
   return (
     <div className="flex items-center gap-1">
-      <Link href={href("/favorites")} className="relative hidden size-11 place-items-center rounded-[var(--radius-md)] text-ink-soft hover:bg-surface hover:text-ink md:grid" aria-label={`${t.common.favorites}${f ? `. ${fmt(t.header.favoritesCount, { count: f })}` : ""}`}>
+      <Link href={href("/favorites")} className="relative hidden size-11 place-items-center rounded-[var(--radius-md)] text-ink-soft transition-[background-color,color,scale] duration-200 hover:bg-surface hover:text-ink motion-safe:active:scale-95 md:grid" aria-label={`${t.common.favorites}${f ? `. ${fmt(t.header.favoritesCount, { count: f })}` : ""}`}>
         <Icon name="heart" />
-        {f ? <span className="absolute -top-0.5 -right-0.5 grid min-w-5 place-items-center rounded-full bg-brand-600 px-1 text-[0.7rem] leading-5 font-bold text-white" aria-hidden="true">{f}</span> : null}
+        {f ? <span key={f} className="sal-favorite-badge absolute -top-0.5 -right-0.5 grid min-w-5 place-items-center rounded-full bg-brand-600 px-1 text-[0.7rem] leading-5 font-bold text-white" aria-hidden="true">{f}</span> : null}
       </Link>
       {orderingEnabled ? (
         <Link
@@ -143,7 +143,11 @@ export function CatalogMenu({ categories }: { categories: MenuCategory[] }) {
     const onDoc = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
     };
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      if (ref.current?.contains(document.activeElement)) ref.current.querySelector("a")?.focus();
+      setOpen(false);
+    };
     document.addEventListener("mousedown", onDoc);
     document.addEventListener("keydown", onKey);
     return () => {
@@ -161,7 +165,9 @@ export function CatalogMenu({ categories }: { categories: MenuCategory[] }) {
     );
   }
   return (
-    <div ref={ref} className="relative hidden md:block">
+    <div ref={ref} className="relative hidden md:block" onBlur={(e) => {
+      if (!e.currentTarget.contains(e.relatedTarget)) setOpen(false);
+    }}>
       <a
         href={href("/catalog")}
         aria-expanded={open}
@@ -172,31 +178,29 @@ export function CatalogMenu({ categories }: { categories: MenuCategory[] }) {
         <Icon name={open ? "close" : "grid"} size={20} />
         {t.common.catalog}
       </a>
-      {open ? (
-        <div id="catalog-menu" className="anim-pop absolute top-full left-0 z-50 mt-2 w-[min(46rem,calc(100vw-3rem))] rounded-[var(--radius-xl)] border border-line bg-white p-3 shadow-[var(--shadow-pop)]">
-          <ul className="grid grid-cols-2 gap-1">
-            {categories.map((c) => (
-              <li key={c.slug}>
-                <Link href={href(`/catalog/${c.slug}`)} className="flex items-center gap-3 rounded-[var(--radius-md)] px-3 py-2.5 hover:bg-brand-50">
-                  <span className="grid size-9 shrink-0 place-items-center rounded-full bg-brand-50 text-brand-700">
-                    <Icon name={isIconName(c.iconKey) ? c.iconKey : "box"} size={20} />
-                  </span>
-                  <span className="min-w-0">
-                    <span className="block font-semibold text-ink">{c.name}</span>
-                    {c.children.length ? <span className="block truncate text-xs text-muted">{c.children.map((x) => x.name).join(", ")}</span> : null}
-                  </span>
-                </Link>
-              </li>
-            ))}
-          </ul>
-          <div className="mt-2 border-t border-line px-3 pt-3">
-            <Link href={href("/catalog")} className="inline-flex items-center gap-1 text-sm font-semibold text-brand-700 hover:underline">
-              {t.catalog.allCategories}
-              <Icon name="chevronRight" size={16} />
-            </Link>
-          </div>
+      <div id="catalog-menu" data-open={open || undefined} inert={!open} className="sal-dropdown absolute top-full left-0 z-50 mt-2 w-[min(46rem,calc(100vw-3rem))] rounded-[var(--radius-xl)] border border-line bg-white p-3 shadow-[var(--shadow-pop)]">
+        <ul className="grid grid-cols-2 gap-1">
+          {categories.map((c) => (
+            <li key={c.slug}>
+              <Link href={href(`/catalog/${c.slug}`)} className="flex items-center gap-3 rounded-[var(--radius-md)] px-3 py-2.5 hover:bg-brand-50">
+                <span className="grid size-9 shrink-0 place-items-center rounded-full bg-brand-50 text-brand-700">
+                  <Icon name={isIconName(c.iconKey) ? c.iconKey : "box"} size={20} />
+                </span>
+                <span className="min-w-0">
+                  <span className="block font-semibold text-ink">{c.name}</span>
+                  {c.children.length ? <span className="block truncate text-xs text-muted">{c.children.map((x) => x.name).join(", ")}</span> : null}
+                </span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+        <div className="mt-2 border-t border-line px-3 pt-3">
+          <Link href={href("/catalog")} className="inline-flex items-center gap-1 text-sm font-semibold text-brand-700 hover:underline">
+            {t.catalog.allCategories}
+            <Icon name="chevronRight" size={16} />
+          </Link>
         </div>
-      ) : null}
+      </div>
     </div>
   );
 }

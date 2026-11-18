@@ -145,45 +145,72 @@ html[data-scroll-behavior="smooth"] {
   animation-duration: 120ms;
 }
 
-/* Dialogs: modal pops in, drawers slide from their edge; both animate out before closing. */
+/* Dialogs and drawers share the same easing, with a shorter exit. */
 dialog[open]::backdrop {
-  animation: 200ms ease-out both sal-fade-in;
+  animation: 220ms var(--ease-out-soft) both sal-fade-in;
 }
 dialog[data-closing]::backdrop {
-  animation: 180ms ease-in both sal-fade-out;
+  animation: 150ms ease-in both sal-fade-out;
 }
 dialog.sal-modal[open] {
-  animation: 220ms var(--ease-out-soft) both sal-pop-in;
+  animation: 240ms var(--ease-out-soft) both sal-pop-in;
 }
 dialog.sal-drawer-right[open] {
-  animation: 280ms var(--ease-out-soft) both sal-slide-from-right;
+  animation: 250ms var(--ease-out-soft) both sal-slide-from-right;
 }
 dialog.sal-drawer-left[open] {
-  animation: 280ms var(--ease-out-soft) both sal-slide-from-left;
+  animation: 250ms var(--ease-out-soft) both sal-slide-from-left;
 }
 dialog.sal-drawer-bottom[open] {
-  animation: 300ms var(--ease-out-soft) both sal-slide-from-bottom;
+  animation: 250ms var(--ease-out-soft) both sal-slide-from-bottom;
 }
 dialog.sal-modal[data-closing] {
   animation: 160ms ease-in both sal-pop-out;
 }
 dialog.sal-drawer-right[data-closing] {
-  animation: 200ms ease-in both sal-slide-to-right;
+  animation: 165ms ease-in both sal-slide-to-right;
 }
 dialog.sal-drawer-left[data-closing] {
-  animation: 200ms ease-in both sal-slide-to-left;
+  animation: 165ms ease-in both sal-slide-to-left;
 }
 dialog.sal-drawer-bottom[data-closing] {
-  animation: 220ms ease-in both sal-slide-to-bottom;
+  animation: 165ms ease-in both sal-slide-to-bottom;
 }
 
-/* Dropdowns (catalogue menu, search suggestions) and toasts */
+/* Dropdowns stay in the tree while closing. Their controls are inert when closed. */
+.sal-dropdown {
+  display: none;
+  opacity: 0;
+  transform: translateY(-5px) scale(0.99);
+  transform-origin: top center;
+  transition: opacity 130ms ease-in, transform 130ms ease-in;
+  transition: opacity 130ms ease-in, transform 130ms ease-in, display 130ms allow-discrete;
+}
+.sal-dropdown[data-open] {
+  display: block;
+  opacity: 1;
+  transform: none;
+  transition-duration: 210ms;
+  transition-timing-function: var(--ease-out-soft);
+}
+@starting-style {
+  .sal-dropdown[data-open] {
+    opacity: 0;
+    transform: translateY(-5px) scale(0.99);
+  }
+}
 .anim-pop {
   animation: 180ms var(--ease-out-soft) both sal-drop-in;
   transform-origin: top center;
 }
 .anim-toast {
-  animation: 260ms var(--ease-out-soft) both sal-rise-in;
+  animation: 240ms var(--ease-out-soft) backwards sal-pop-in;
+}
+.anim-toast[data-closing] {
+  animation: 150ms ease-in both sal-toast-out;
+}
+.sal-favorite-badge {
+  animation: 220ms var(--ease-out-soft) backwards sal-badge-in;
 }
 
 /* Product lists: cards fade in once with a tiny stagger for the first row(s); later cards appear together. */
@@ -204,35 +231,61 @@ dialog.sal-drawer-bottom[data-closing] {
   transform: scale(0.97);
 }
 
-/* Reveal on first scroll into view (HeroStats.tsx). Hidden only when JS runs (html.js, set in the layout head);
-   a late fallback shows the content even if the script never starts. */
-.sal-reveal,
-.sal-reveal-text {
-  transition:
-    opacity 420ms var(--ease-out-soft),
-    transform 420ms var(--ease-out-soft),
-    letter-spacing 520ms var(--ease-out-soft);
+/* Search focus keeps a visible outline while the accent ring eases in. */
+.sal-search-input {
+  transition: border-color 180ms var(--ease-out-soft), box-shadow 180ms var(--ease-out-soft);
 }
-.js .sal-reveal:not(.is-visible) {
-  opacity: 0;
-  transform: translateY(10px);
-  animation: sal-reveal-fallback 1ms linear 4s forwards;
+.sal-search-input:focus {
+  outline: 1px solid var(--color-brand-600);
+  outline-offset: 0;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-brand-600) 14%, transparent);
 }
-.js .sal-reveal-text:not(.is-visible) {
-  opacity: 0;
-  letter-spacing: 0.35em;
-  animation: sal-reveal-text-fallback 1ms linear 4s forwards;
+.sal-search-submit {
+  transition: background-color 180ms var(--ease-out-soft), scale 180ms var(--ease-out-soft);
 }
-@keyframes sal-reveal-text-fallback {
-  to {
-    opacity: 1;
-    letter-spacing: normal;
+.sal-search-label[data-pending] {
+  animation: 120ms ease-out 120ms both sal-fade-out;
+}
+.sal-search-spinner {
+  animation: 120ms ease-out 120ms backwards sal-fade-in;
+}
+
+.sal-pharmacy-card {
+  transition: border-color 200ms var(--ease-out-soft), box-shadow 200ms var(--ease-out-soft), translate 200ms var(--ease-out-soft);
+}
+@media (hover: hover) and (pointer: fine) {
+  .sal-pharmacy-card:not([data-selected]):hover {
+    border-color: var(--color-brand-200);
+    box-shadow: var(--shadow-card);
   }
 }
-@keyframes sal-reveal-fallback {
-  to {
-    opacity: 1;
-    transform: none;
+
+@media (prefers-reduced-motion: no-preference) {
+  .sal-search-submit:active { scale: 0.98; }
+  .sal-hero-copy > :nth-child(-n + 5),
+  .sal-hero-stats > * {
+    animation: 440ms var(--ease-out-soft) var(--hero-delay, 0ms) backwards sal-hero-in;
+  }
+  .sal-hero-copy > :nth-child(2) { --hero-delay: 35ms; }
+  .sal-hero-copy > :nth-child(3) { --hero-delay: 70ms; }
+  .sal-hero-copy > :nth-child(4) { --hero-delay: 120ms; }
+  .sal-hero-copy > :nth-child(5) { --hero-delay: 165ms; }
+  .sal-hero-stats > :nth-child(1) { --hero-delay: 205ms; }
+  .sal-hero-stats > :nth-child(2) { --hero-delay: 245ms; }
+  .sal-hero-stats > :nth-child(3) { --hero-delay: 285ms; }
+
+  .sal-hero-ring {
+    animation: 18s ease-in-out sal-ring-drift;
+  }
+  .sal-home-revealed {
+    animation: 360ms var(--ease-out-soft) var(--reveal-delay, 0ms) backwards sal-rise-in;
+  }
+  @media (min-width: 64rem) {
+    .sal-home-grid > :nth-child(3n + 2) { --reveal-delay: 40ms; }
+    .sal-home-grid > :nth-child(3n) { --reveal-delay: 80ms; }
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .sal-pharmacy-card:hover { translate: 0 -2px; }
   }
 }
 
@@ -491,20 +544,41 @@ details[open]::details-content {
 }
 @keyframes sal-rise-in {
   from {
+    opacity: 0.55;
+    transform: translateY(9px);
+  }
+}
+@keyframes sal-hero-in {
+  from {
+    opacity: 0.78;
+    transform: translateY(8px);
+  }
+}
+@keyframes sal-ring-drift {
+  50% { transform: translate(4px, -5px) scale(1.025); }
+}
+@keyframes sal-badge-in {
+  from {
+    opacity: 0.55;
+    scale: 0.88;
+  }
+}
+@keyframes sal-toast-out {
+  to {
     opacity: 0;
-    transform: translateY(10px);
+    transform: translateY(5px) scale(0.99);
   }
 }
 @keyframes sal-pop-in {
   from {
     opacity: 0;
-    transform: translateY(12px) scale(0.97);
+    transform: translateY(7px) scale(0.985);
   }
 }
 @keyframes sal-pop-out {
   to {
     opacity: 0;
-    transform: translateY(8px) scale(0.98);
+    transform: translateY(5px) scale(0.99);
   }
 }
 @keyframes sal-drop-in {
@@ -515,53 +589,62 @@ details[open]::details-content {
 }
 @keyframes sal-slide-from-right {
   from {
-    transform: translateX(100%);
+    opacity: 0;
+    transform: translateX(14px);
   }
 }
 @keyframes sal-slide-to-right {
   to {
-    transform: translateX(100%);
+    opacity: 0;
+    transform: translateX(10px);
   }
 }
 @keyframes sal-slide-from-left {
   from {
-    transform: translateX(-100%);
+    opacity: 0;
+    transform: translateX(-14px);
   }
 }
 @keyframes sal-slide-to-left {
   to {
-    transform: translateX(-100%);
+    opacity: 0;
+    transform: translateX(-10px);
   }
 }
 @keyframes sal-slide-from-bottom {
   from {
-    transform: translateY(100%);
+    opacity: 0;
+    transform: translateY(14px);
   }
 }
 @keyframes sal-slide-to-bottom {
   to {
-    transform: translateY(100%);
+    opacity: 0;
+    transform: translateY(10px);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
-  *::after {
+  *::after,
+  dialog::backdrop {
     animation-duration: 0.01ms !important;
+    animation-delay: 0ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+    transition-delay: 0ms !important;
     scroll-behavior: auto !important;
   }
   .press:active {
     transform: none;
   }
-  .js .sal-reveal:not(.is-visible),
-  .js .sal-reveal-text:not(.is-visible) {
-    opacity: 1;
-    transform: none;
-    letter-spacing: normal;
+  .sal-search-spinner {
     animation: none;
+  }
+  .sal-search-label[data-pending] {
+    animation: none;
+    opacity: 0;
   }
   .sal-me-dot::after,
   .sal-fav-burst {

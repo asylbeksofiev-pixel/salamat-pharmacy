@@ -8,8 +8,8 @@ export type ButtonSize = "sm" | "md" | "lg";
 
 const base =
   "inline-flex items-center justify-center gap-2 rounded-[var(--radius-md)] font-semibold select-none whitespace-nowrap " +
-  "transition-[background-color,border-color,color,box-shadow,transform] duration-150 ease-[var(--ease-out-soft)] " +
-  "focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-brand-600 motion-safe:active:scale-[0.97] " +
+  "transition-[background-color,border-color,color,box-shadow,scale] duration-200 ease-[var(--ease-out-soft)] " +
+  "focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-brand-600 motion-safe:active:scale-[0.98] " +
   "disabled:cursor-not-allowed disabled:opacity-55 disabled:active:scale-100 aria-disabled:cursor-not-allowed aria-disabled:opacity-55";
 
 const variants: Record<ButtonVariant, string> = {

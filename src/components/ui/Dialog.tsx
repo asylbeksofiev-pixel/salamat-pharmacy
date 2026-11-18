@@ -1,7 +1,7 @@
 "use client";
 // Modal and Drawer built on the native <dialog>: focus is trapped, Escape closes, focus returns to the trigger.
 // Opening and closing are animated (CSS in globals.css); content stays mounted until the close animation ends.
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { cn } from "./cn";
 import { Icon } from "../icons";
 
@@ -91,10 +91,11 @@ function useDialog(open: boolean, onClose: () => void) {
 
 export function Modal({ open, onClose, title, children, footer, closeLabel, className, description }: DialogProps) {
   const { ref, mounted } = useDialog(open, onClose);
+  const titleId = useId();
   return (
     <dialog
       ref={ref}
-      aria-labelledby="modal-title"
+      aria-labelledby={titleId}
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
@@ -107,7 +108,7 @@ export function Modal({ open, onClose, title, children, footer, closeLabel, clas
         <div className="flex max-h-[85vh] flex-col">
           <div className="flex items-start justify-between gap-4 border-b border-line px-5 py-4">
             <div>
-              <h2 id="modal-title" className="text-lg font-semibold">
+              <h2 id={titleId} className="text-lg font-semibold">
                 {title}
               </h2>
               {description ? <p className="mt-1 text-sm text-muted">{description}</p> : null}
@@ -126,6 +127,7 @@ export function Modal({ open, onClose, title, children, footer, closeLabel, clas
 
 export function Drawer({ open, onClose, title, children, footer, closeLabel, className, side = "right", description }: DialogProps & { side?: "left" | "right" | "bottom" }) {
   const { ref, mounted } = useDialog(open, onClose);
+  const titleId = useId();
   const pos =
     side === "left"
       ? "sal-drawer-left mr-auto ml-0 h-dvh max-h-dvh w-[min(24rem,92vw)] rounded-r-[var(--radius-xl)]"
@@ -135,7 +137,7 @@ export function Drawer({ open, onClose, title, children, footer, closeLabel, cla
   return (
     <dialog
       ref={ref}
-      aria-labelledby="drawer-title"
+      aria-labelledby={titleId}
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
@@ -145,7 +147,7 @@ export function Drawer({ open, onClose, title, children, footer, closeLabel, cla
         <div className="flex h-full max-h-[inherit] flex-col">
           <div className="flex items-start justify-between gap-3 border-b border-line px-5 py-4">
             <div className="min-w-0">
-              <h2 id="drawer-title" className="text-lg font-semibold">
+              <h2 id={titleId} className="text-lg font-semibold">
                 {title}
               </h2>
               {description ? <p className="mt-0.5 text-sm text-muted">{description}</p> : null}

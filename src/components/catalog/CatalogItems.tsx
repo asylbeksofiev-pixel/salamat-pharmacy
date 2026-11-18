@@ -10,6 +10,7 @@ import { Pagination } from "../ui/Pagination";
 import { EmptyState, ErrorState, Notice } from "../ui/Feedback";
 import { ButtonLink } from "../ui/Button";
 import { Icon } from "../icons";
+import { CatalogSearchForm } from "./CatalogSearchForm";
 import { FavoriteButton } from "./OfferActions";
 
 export function catalogItemHref(locale: Locale, id: string) {
@@ -111,32 +112,6 @@ export function CatalogItemCard({ item, t, locale }: { item: CatalogItem; t: Dic
   );
 }
 
-export function CatalogSearchForm({ action, q, t }: { action: string; q: string; t: Dictionary }) {
-  return (
-    <form action={action} method="get" role="search" className="flex w-full max-w-2xl gap-2">
-      <label htmlFor="catalog-q" className="sr-only">
-        {t.items.searchLabel}
-      </label>
-      <div className="relative flex-1">
-        <Icon name="search" size={20} className="pointer-events-none absolute top-1/2 left-3.5 -translate-y-1/2 text-muted" />
-        <input
-          id="catalog-q"
-          name="q"
-          type="search"
-          defaultValue={q}
-          maxLength={100}
-          enterKeyHint="search"
-          placeholder={t.items.searchPlaceholder}
-          className="h-12 w-full rounded-[var(--radius-lg)] border border-line-strong bg-white pr-3 pl-11 text-[0.98rem] placeholder:text-muted/85 focus:border-brand-600 focus:outline-3 focus:outline-offset-0 focus:outline-brand-600/25"
-        />
-      </div>
-      <button type="submit" className="press h-12 shrink-0 rounded-[var(--radius-lg)] bg-brand-600 px-5 font-semibold text-white hover:bg-brand-700">
-        {t.header.searchSubmit}
-      </button>
-    </form>
-  );
-}
-
 function pageHref(basePath: string, q: string | null, page: number) {
   const p = new URLSearchParams();
   if (q) p.set("q", q);
@@ -176,7 +151,7 @@ export function CatalogItemsView({
       <Breadcrumbs items={crumbs} label={t.common.breadcrumbs} baseUrl={baseUrl} />
       <h1 className="mt-4 text-[1.75rem] leading-tight font-bold tracking-tight text-ink sm:text-[2.1rem]">{title}</h1>
       <div className="mt-4">
-        <CatalogSearchForm action={basePath} q={q} t={t} />
+        <CatalogSearchForm action={basePath} q={q} />
       </div>
       {before}
       {failed || !result ? (

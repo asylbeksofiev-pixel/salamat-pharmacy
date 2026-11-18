@@ -28,10 +28,10 @@ export function CategoryTile({ slug, name, iconKey, locale, count }: { slug: str
 
 export function PharmacyCard({ p, t, locale, selected, routes }: { p: PharmacyView; t: Dictionary; locale: Locale; selected: boolean; routes: { twoGis: string; yandex: string } }) {
   return (
-    <article className={`flex h-full flex-col gap-3 rounded-[var(--radius-xl)] border bg-white p-4 sm:p-5 ${selected ? "border-brand-600 ring-1 ring-brand-600" : "border-line"}`}>
+    <article data-selected={selected || undefined} className={`sal-pharmacy-card flex h-full flex-col gap-3 rounded-[var(--radius-xl)] border bg-white p-4 sm:p-5 ${selected ? "border-brand-600 ring-1 ring-brand-600" : "border-line"}`}>
       <div className="flex items-start justify-between gap-3">
         <h3 className="leading-snug font-semibold text-ink">
-          <Link href={localizedPath(locale, `/pharmacies/${p.slug}`)} className="hover:text-brand-700 hover:underline">
+          <Link href={localizedPath(locale, `/pharmacies/${p.slug}`)} className="transition-colors hover:text-brand-700 hover:underline">
             {p.address}
           </Link>
         </h3>
@@ -64,8 +64,8 @@ export function PharmacyCard({ p, t, locale, selected, routes }: { p: PharmacyVi
       </p>
       <div className="mt-auto flex flex-wrap items-center gap-2 pt-2">
         <SelectPharmacyButton id={p.id} selected={selected} />
-        <a href={routes.twoGis} target="_blank" rel="noopener noreferrer" className="inline-flex h-11 items-center gap-1.5 rounded-[var(--radius-md)] px-3 text-sm font-semibold text-brand-700 hover:bg-brand-50">
-          <Icon name="route" size={18} />
+        <a href={routes.twoGis} target="_blank" rel="noopener noreferrer" className="group inline-flex h-11 items-center gap-1.5 rounded-[var(--radius-md)] px-3 text-sm font-semibold text-brand-700 transition-colors hover:bg-brand-50">
+          <Icon name="route" size={18} className="transition-transform duration-200 motion-safe:group-hover:translate-x-0.5" />
           {t.pharmacy.route}
           <span className="sr-only"> — {t.pharmacy.route2gis}</span>
         </a>

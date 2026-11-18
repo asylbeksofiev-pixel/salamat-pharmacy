@@ -10,10 +10,11 @@ import { getActivePromotions } from "@/server/promotions";
 import { featuredItems } from "@/server/products";
 import { getSettings } from "@/server/settings";
 import { getStorefrontState } from "@/server/storefront";
-import { CatalogSearchForm } from "@/components/catalog/CatalogItems";
+import { CatalogSearchForm } from "@/components/catalog/CatalogSearchForm";
 import { pageMetadata } from "@/server/seo";
 import { SearchBox } from "@/components/site/SearchBox";
 import { HeroStats } from "@/components/site/HeroStats";
+import { HomeScrollMotion } from "@/components/site/HomeScrollMotion";
 import { CategoryTile, PharmacyCard, PromotionCard } from "@/components/catalog/Tiles";
 import { ProductGrid } from "@/components/catalog/ProductCard";
 import { ButtonLink } from "@/components/ui/Button";
@@ -28,7 +29,7 @@ export async function generateMetadata({ params }: PageProps<"/[locale]">) {
 
 function SectionTitle({ id, title, action }: { id: string; title: string; action?: React.ReactNode }) {
   return (
-    <div className="mb-5 flex items-end justify-between gap-4">
+    <div data-home-reveal className="mb-5 flex items-end justify-between gap-4">
       <h2 id={id} className="text-2xl font-bold tracking-tight text-ink sm:text-[1.75rem]">
         {title}
       </h2>
@@ -57,18 +58,18 @@ export default async function HomePage({ params }: PageProps<"/[locale]">) {
   const shownPharmacies = selected ? [selected, ...pharmacies.filter((p) => p.id !== selected.id)].slice(0, 6) : pharmacies.slice(0, 6);
 
   return (
-    <>
+    <HomeScrollMotion>
       {/* Hero */}
       <section className="relative overflow-hidden border-b border-line bg-gradient-to-b from-brand-50/70 to-white">
         <div className="container-page grid items-center gap-10 py-10 md:py-16 lg:grid-cols-[1.15fr_1fr] lg:py-20">
-          <div className="relative z-10 flex flex-col gap-6">
+          <div className="sal-hero-copy relative z-10 flex flex-col gap-6">
             <p className="inline-flex items-center gap-2 self-start rounded-full bg-white px-3 py-1 text-sm font-semibold text-brand-800 shadow-[var(--shadow-card)]">
               <span className="size-2 rounded-full bg-accent-500" aria-hidden="true" />
               {t.meta.siteName}
             </p>
             <h1 className="text-[2.1rem] leading-[1.08] font-extrabold tracking-tight text-ink sm:text-5xl lg:text-[3.4rem]">{t.home.heroTitle}</h1>
             <p className="max-w-xl text-lg text-ink-soft">{t.home.heroText}</p>
-            <div className="hidden max-w-xl md:block">
+            <div className="relative z-10 hidden max-w-xl md:block">
               <p className="mb-2 text-sm font-semibold text-ink">{t.home.heroSearchLabel}</p>
               <SearchBox size="lg" idPrefix="hero" />
             </div>
@@ -85,13 +86,13 @@ export default async function HomePage({ params }: PageProps<"/[locale]">) {
               locale={numberLocale}
               stats={[
                 { term: t.common.pharmacies, value: pharmacies.length, caption: t.home.heroPoints },
-                { term: t.common.about, value: settings.company.foundedYear, from: settings.company.foundedYear - 20, grouping: false, caption: t.home.heroSince },
+                { term: t.common.about, value: settings.company.foundedYear, grouping: false, caption: t.home.heroSince },
                 { term: "GPP", value: "GPP", caption: t.home.heroGpp },
               ]}
             />
           </div>
           <div className="relative hidden aspect-square w-full max-w-[34rem] justify-self-center lg:block" aria-hidden="true">
-            <div className="absolute inset-[4%] rounded-full bg-brand-100/70" />
+            <div className="sal-hero-ring absolute inset-[4%] rounded-full bg-brand-100/70" />
             <div className="absolute inset-[16%] rounded-full bg-white shadow-[0_30px_80px_rgb(0_122_61/0.18)]" />
             <div className="absolute inset-[28%]">
               <Image src="/brand/salamat-mark.png" alt="" fill sizes="300px" className="object-contain" priority />
@@ -127,9 +128,9 @@ export default async function HomePage({ params }: PageProps<"/[locale]">) {
               </Link>
             }
           />
-          <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <ul className="sal-home-grid grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {roots.map((c) => (
-              <li key={c.slug}>
+              <li key={c.slug} data-home-reveal>
                 <CategoryTile slug={c.slug} name={c.name} iconKey={c.iconKey} locale={locale} />
               </li>
             ))}
@@ -138,7 +139,7 @@ export default async function HomePage({ params }: PageProps<"/[locale]">) {
       ) : (
         /* No categories in the data yet: a clear way into the full catalogue instead of empty sections. */
         <section aria-labelledby="h-cat" className="container-page py-10 md:py-12">
-          <div className="flex flex-col gap-5 rounded-[var(--radius-2xl)] border border-line bg-white p-5 shadow-[var(--shadow-card)] sm:p-8 md:flex-row md:items-center md:justify-between md:gap-8">
+          <div data-home-reveal className="flex flex-col gap-5 rounded-[var(--radius-2xl)] border border-line bg-white p-5 shadow-[var(--shadow-card)] sm:p-8 md:flex-row md:items-center md:justify-between md:gap-8">
             <div className="min-w-0">
               <h2 id="h-cat" className="text-2xl font-bold tracking-tight text-ink sm:text-[1.75rem]">
                 {t.home.catalogTitle}
@@ -149,7 +150,7 @@ export default async function HomePage({ params }: PageProps<"/[locale]">) {
               <p className="mt-2 max-w-xl text-muted">{t.home.catalogText}</p>
             </div>
             <div className="flex w-full flex-col gap-3 md:max-w-md">
-              <CatalogSearchForm action={href("/catalog")} q="" t={t} />
+              <CatalogSearchForm action={href("/catalog")} q="" />
               <Link href={href("/catalog")} className="inline-flex items-center gap-1 self-start text-sm font-semibold text-brand-700 hover:underline">
                 {t.home.catalogCta}
                 <Icon name="chevronRight" size={16} />
@@ -172,9 +173,9 @@ export default async function HomePage({ params }: PageProps<"/[locale]">) {
               </Link>
             }
           />
-          <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <ul className="sal-home-grid grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {promotions.slice(0, 3).map((p) => (
-              <li key={p.slug}>
+              <li key={p.slug} data-home-reveal>
                 <PromotionCard p={p} t={t} locale={locale} />
               </li>
             ))}
@@ -195,13 +196,13 @@ export default async function HomePage({ params }: PageProps<"/[locale]">) {
       <section aria-labelledby="h-how" className="bg-surface py-12">
         <div className="container-page">
           <SectionTitle id="h-how" title={t.home.howTitle} />
-          <ol className="grid gap-4 md:grid-cols-3">
+          <ol className="sal-home-grid grid gap-4 md:grid-cols-3">
             {[
               { n: 1, title: t.home.how1Title, text: t.home.how1Text, icon: "search" as const },
               { n: 2, title: t.home.how2Title, text: t.home.how2Text, icon: "pin" as const },
               { n: 3, title: t.home.how3Title, text: t.home.how3Text, icon: "phone" as const },
             ].map((s) => (
-              <li key={s.n} className="flex gap-4 rounded-[var(--radius-xl)] bg-white p-5 shadow-[var(--shadow-card)]">
+              <li key={s.n} data-home-reveal className="flex gap-4 rounded-[var(--radius-xl)] bg-white p-5 shadow-[var(--shadow-card)]">
                 <span className="grid size-12 shrink-0 place-items-center rounded-full bg-brand-600 text-lg font-bold text-white">{s.n}</span>
                 <span>
                   <span className="block font-semibold text-ink">{s.title}</span>
@@ -225,9 +226,9 @@ export default async function HomePage({ params }: PageProps<"/[locale]">) {
             </Link>
           }
         />
-        <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <ul className="sal-home-grid grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {shownPharmacies.map((p) => (
-            <li key={p.id}>
+            <li key={p.id} data-home-reveal>
               <PharmacyCard p={p} t={t} locale={locale} selected={selected?.id === p.id} routes={routeLinks(p)} />
             </li>
           ))}
@@ -236,7 +237,7 @@ export default async function HomePage({ params }: PageProps<"/[locale]">) {
 
       {/* About + help */}
       <section className="container-page grid gap-4 pb-4 lg:grid-cols-[1.4fr_1fr]">
-        <div aria-labelledby="h-about" className="relative overflow-hidden rounded-[var(--radius-2xl)] bg-brand-800 p-6 text-white sm:p-10">
+        <div aria-labelledby="h-about" data-home-reveal className="relative overflow-hidden rounded-[var(--radius-2xl)] bg-brand-800 p-6 text-white sm:p-10">
           <svg className="absolute -top-16 -right-16 h-72 w-72 text-white/10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" aria-hidden="true">
             <path d="M12 20s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.2a4.3 4.3 0 0 1 7.5 2.6C19.5 15.4 12 20 12 20Z" />
           </svg>
@@ -251,7 +252,7 @@ export default async function HomePage({ params }: PageProps<"/[locale]">) {
             <Icon name="chevronRight" size={18} />
           </Link>
         </div>
-        <div aria-labelledby="h-help" className="flex flex-col justify-between gap-6 rounded-[var(--radius-2xl)] border border-line bg-white p-6 sm:p-8">
+        <div aria-labelledby="h-help" data-home-reveal className="flex flex-col justify-between gap-6 rounded-[var(--radius-2xl)] border border-line bg-white p-6 sm:p-8">
           <div>
             <h2 id="h-help" className="text-2xl font-bold text-ink">{t.home.helpTitle}</h2>
             <p className="mt-2 text-muted">{t.home.helpText}</p>
@@ -272,6 +273,6 @@ export default async function HomePage({ params }: PageProps<"/[locale]">) {
         </div>
       </section>
       <p className="sr-only">{fmt(t.pharmacy.count, { count: pharmacies.length })}</p>
-    </>
+    </HomeScrollMotion>
   );
 }
