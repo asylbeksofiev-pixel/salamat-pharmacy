@@ -358,3 +358,40 @@ test("English version: /en routes, switcher keeps the page and query, no Russian
   await page.goto("/");
   await expect(page).toHaveURL(/\/en$/); // remembered choice
 });
+
+test("product page on a phone: main action, quantity, sticky bar, state after reload", async ({ browser }) => {
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+  const page = await ctx.newPage();
+  await page.goto("/catalog?q=ASP-100");
+  await page.locator("main article h3 a").first().click();
+  await expect(page).toHaveURL(/\/catalog\/item\/\d+$/);
+  const main = page.locator("main");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Аспирин Кардио 100 мг №28 табл.");
+  await expect(main).toContainText("Артикул: ASP-100");
+  await expect(main).toContainText("Цена уточняется");
+  await expect(main).toContainText("Наличие уточняется");
+  await expect(main).not.toContainText(/\b0\s?₸/);
+  const action = page.locator("#pdp-main-action");
+  // The action bar is hidden while the main action is on screen.
+  const bar = page.getByRole("region", { name: "Действия с товаром" });
+  await expect(bar).toBeHidden();
+  await action.getByRole("button", { name: "В корзину" }).dblclick();
+  await expect(action.getByRole("link", { name: /В корзине/ })).toBeVisible();
+  await expect(action).toContainText("Товар в корзине");
+  await action.getByRole("button", { name: "Увеличить количество" }).click();
+  await expect(action.getByRole("spinbutton")).toHaveValue("2");
+  // Scrolled past the action: the bar appears above the bottom navigation and does not overlap it.
+  await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+  await expect(bar).toBeVisible();
+  const barBox = (await bar.boundingBox())!;
+  const navBox = (await page.getByRole("navigation", { name: "Меню" }).boundingBox())!;
+  expect(barBox.y + barBox.height).toBeLessThanOrEqual(navBox.y + 1);
+  await page.reload();
+  await expect(page.locator("#pdp-main-action").getByRole("spinbutton")).toHaveValue("2");
+  // Kazakh labels fit (no clipped text) on a narrow phone.
+  await page.setViewportSize({ width: 320, height: 700 });
+  await page.goto("/kk/catalog?q=DUP-001");
+  const cut = await page.locator("main").evaluate((m) => [...m.querySelectorAll("button span, a span")].filter((s) => !s.closest(".sr-only") && s.scrollWidth > s.clientWidth + 1).length);
+  expect(cut).toBe(0);
+  await ctx.close();
+});

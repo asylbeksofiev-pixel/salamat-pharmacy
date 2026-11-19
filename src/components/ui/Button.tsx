@@ -7,7 +7,7 @@ export type ButtonVariant = "primary" | "secondary" | "outline" | "ghost" | "dan
 export type ButtonSize = "sm" | "md" | "lg";
 
 const base =
-  "inline-flex items-center justify-center gap-2 rounded-[var(--radius-md)] font-semibold select-none whitespace-nowrap " +
+  "inline-flex items-center justify-center gap-2 rounded-[var(--radius-md)] font-semibold select-none " +
   "transition-[background-color,border-color,color,box-shadow,scale] duration-200 ease-[var(--ease-out-soft)] " +
   "focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-brand-600 motion-safe:active:scale-[0.98] " +
   "disabled:cursor-not-allowed disabled:opacity-55 disabled:active:scale-100 aria-disabled:cursor-not-allowed aria-disabled:opacity-55";
@@ -22,13 +22,19 @@ const variants: Record<ButtonVariant, string> = {
 };
 
 const sizes: Record<ButtonSize, string> = {
-  sm: "h-9 px-3 text-sm",
-  md: "h-11 px-4 text-[0.95rem]",
-  lg: "h-13 px-6 text-base",
+  sm: "h-9 px-3 text-sm whitespace-nowrap",
+  md: "h-11 px-4 text-[0.95rem] whitespace-nowrap",
+  lg: "h-13 px-6 text-base whitespace-nowrap",
+};
+/** `wrap`: the label may take two lines (long Kazakh/English labels on narrow screens); the height stays a minimum. */
+const wrapSizes: Record<ButtonSize, string> = {
+  sm: "min-h-9 px-3 py-1 text-sm leading-tight text-center",
+  md: "min-h-11 px-4 py-1.5 text-[0.95rem] leading-tight text-center",
+  lg: "min-h-13 px-6 py-2 text-base leading-tight text-center",
 };
 
-export function buttonClass(variant: ButtonVariant = "primary", size: ButtonSize = "md", extra?: string) {
-  return cn(base, variants[variant], sizes[size], extra);
+export function buttonClass(variant: ButtonVariant = "primary", size: ButtonSize = "md", extra?: string, wrap = false) {
+  return cn(base, variants[variant], wrap ? wrapSizes[size] : sizes[size], extra);
 }
 
 export function Spinner({ className }: { className?: string }) {
@@ -47,11 +53,12 @@ type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   icon?: IconName;
   iconRight?: IconName;
   children?: ReactNode;
+  wrap?: boolean;
 };
 
-export function Button({ variant = "primary", size = "md", loading, icon, iconRight, className, children, disabled, type = "button", ...rest }: ButtonProps) {
+export function Button({ variant = "primary", size = "md", loading, icon, iconRight, className, children, disabled, type = "button", wrap = false, ...rest }: ButtonProps) {
   return (
-    <button type={type} className={buttonClass(variant, size, className)} disabled={disabled || loading} aria-busy={loading || undefined} {...rest}>
+    <button type={type} className={buttonClass(variant, size, className, wrap)} disabled={disabled || loading} aria-busy={loading || undefined} {...rest}>
       {loading ? <Spinner /> : icon ? <Icon name={icon} size={size === "sm" ? 18 : 20} /> : null}
       {children}
       {iconRight && !loading ? <Icon name={iconRight} size={size === "sm" ? 18 : 20} /> : null}
