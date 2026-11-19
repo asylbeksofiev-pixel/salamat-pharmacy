@@ -6,7 +6,8 @@ import { Icon } from "../icons";
 import { SearchSubmitLabel } from "../site/SearchSubmitLabel";
 import { useSite } from "../site/SiteProvider";
 
-export function CatalogSearchForm({ action, q }: { action: string; q: string }) {
+/** `keep`: other catalogue parameters (sections, filters, sort) that a new search keeps; the page goes back to 1. */
+export function CatalogSearchForm({ action, q, keep = [] }: { action: string; q: string; keep?: [string, string][] }) {
   const { t } = useSite();
   const id = useId();
   const router = useRouter();
@@ -16,10 +17,15 @@ export function CatalogSearchForm({ action, q }: { action: string; q: string }) 
     <form action={action} method="get" role="search" className="flex w-full max-w-2xl gap-2" onSubmit={(e) => {
       e.preventDefault();
       if (pending) return;
-      const query = String(new FormData(e.currentTarget).get("q") ?? "");
-      const params = new URLSearchParams({ q: query });
-      startTransition(() => router.push(`${action}?${params}`));
+      const query = String(new FormData(e.currentTarget).get("q") ?? "").trim();
+      const params = new URLSearchParams(query ? { q: query } : {});
+      for (const [k, v] of keep) params.append(k, v);
+      const qs = params.toString();
+      startTransition(() => router.push(qs ? `${action}?${qs}` : action));
     }}>
+      {keep.map(([k, v], i) => (
+        <input key={`${k}-${i}`} type="hidden" name={k} value={v} />
+      ))}
       <label htmlFor={id} className="sr-only">{t.items.searchLabel}</label>
       <div className="relative min-w-0 flex-1">
         <Icon name="search" size={20} className="pointer-events-none absolute top-1/2 left-3.5 -translate-y-1/2 text-muted" />

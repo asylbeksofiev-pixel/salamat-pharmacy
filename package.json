@@ -20,7 +20,8 @@
     "orders:anonymize": "tsx --conditions=react-server scripts/anonymize-orders.ts",
     "templates:build": "tsx scripts/make-templates.ts",
     "postinstall": "prisma generate",
-    "db:catalog-fixture": "node scripts/catalog-fixture.mjs"
+    "db:catalog-fixture": "node scripts/catalog-fixture.mjs",
+    "catalog:classify": "tsx scripts/classify-catalog.ts"
   },
   "dependencies": {
     "@fontsource-variable/onest": "^5.3.1",

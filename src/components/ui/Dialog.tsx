@@ -157,7 +157,7 @@ export function Drawer({ open, onClose, title, children, footer, closeLabel, cla
             </button>
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-4">{children}</div>
-          {footer ? <div className="border-t border-line px-5 py-4">{footer}</div> : null}
+          {footer ? <div className="border-t border-line px-5 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))]">{footer}</div> : null}
         </div>
       ) : null}
     </dialog>

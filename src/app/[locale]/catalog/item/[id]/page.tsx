@@ -37,7 +37,7 @@ export default async function CatalogItemPage({ params }: PageProps<"/[locale]/c
   const { locale, id } = await params;
   if (!isLocale(locale) || !isCatalogId(id)) notFound();
   const t = getDictionary(locale);
-  const [item, pharmacy, settings, store] = await Promise.all([getCatalogItem(id), getSelectedPharmacy(locale), getSettings(), getStorefrontState()]);
+  const [item, pharmacy, settings, store] = await Promise.all([getCatalogItem(id, locale), getSelectedPharmacy(locale), getSettings(), getStorefrontState()]);
   if (!item) notFound();
   const href = (p: string) => localizedPath(locale, p);
   // A selected pharmacy without a known phone falls back to the helpline, and says so.
@@ -63,7 +63,12 @@ export default async function CatalogItemPage({ params }: PageProps<"/[locale]/c
         <Breadcrumbs
           label={t.common.breadcrumbs}
           baseUrl={env.appUrl}
-          items={[{ label: t.common.home, href: href("/") }, { label: t.catalog.title, href: href("/catalog") }, { label: item.name }]}
+          items={[
+            { label: t.common.home, href: href("/") },
+            { label: t.catalog.title, href: href("/catalog") },
+            ...(item.category && item.categorySlug ? [{ label: item.category, href: href(`/catalog/${item.categorySlug}`) }] : []),
+            { label: item.name },
+          ]}
         />
       </div>
 
@@ -79,7 +84,11 @@ export default async function CatalogItemPage({ params }: PageProps<"/[locale]/c
         </div>
 
         <section aria-labelledby="item-title" className="flex min-w-0 flex-col">
-          {item.category ? <p className="mb-1 text-sm font-semibold text-brand-700">{item.category}</p> : null}
+          {item.category && item.categorySlug ? (
+            <Link href={href(`/catalog/${item.categorySlug}`)} className="mb-1 self-start text-sm font-semibold text-brand-700 hover:underline">
+              {item.category}
+            </Link>
+          ) : null}
           <h1 id="item-title" lang={nameLang} className="text-[1.375rem] leading-[1.2] font-bold tracking-tight [overflow-wrap:anywhere] text-ink sm:text-[1.75rem] lg:text-[2rem]">
             {item.name}
           </h1>

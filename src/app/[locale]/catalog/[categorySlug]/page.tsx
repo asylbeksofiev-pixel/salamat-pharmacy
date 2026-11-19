@@ -8,7 +8,7 @@ import { parseCatalogParams, hasActiveFilters } from "@/lib/params";
 import { CatalogView } from "@/components/catalog/CatalogView";
 import { CatalogItemsView } from "@/components/catalog/CatalogItems";
 import { Notice } from "@/components/ui/Feedback";
-import { listCatalogItems, type CatalogPage } from "@/server/catalog-items";
+import { loadCatalogListing } from "@/server/catalog-listing";
 import { getStorefrontState } from "@/server/storefront";
 
 export async function generateMetadata({ params, searchParams }: PageProps<"/[locale]/catalog/[categorySlug]">) {
@@ -18,11 +18,13 @@ export async function generateMetadata({ params, searchParams }: PageProps<"/[lo
   const tree = await getCategoryTree(locale);
   const node = tree.bySlug.get(categorySlug);
   if (!node) return {};
-  const f = parseCatalogParams(await searchParams);
+  const sp = await searchParams;
+  const f = parseCatalogParams(sp);
   const store = await getStorefrontState();
   const empty = !store.categoryIdsWithProducts.has(node.id);
+  const extra = ["category", "priceMin", "priceMax", "hasPrice", "hasPhoto", "sort", "q"].some((k) => k in sp);
   return pageMetadata(locale, `/catalog/${node.slug}`, node.name, `${node.name} — ${t.meta.catalogDescription}`, {
-    noindex: empty || hasActiveFilters(f) || (f.page ?? 1) > 1 || !!f.sort,
+    noindex: empty || extra || hasActiveFilters(f) || (f.page ?? 1) > 1 || !!f.sort,
   });
 }
 
@@ -35,33 +37,44 @@ export default async function CategoryPage({ params, searchParams }: PageProps<"
   if (!node) notFound();
   const sp = await searchParams;
   const store = await getStorefrontState();
-  if (!store.categoryIdsWithProducts.has(node.id)) {
-    // The product list (public.pharmacy_products) has no categories yet, so this section has no products.
-    // Say so plainly and show the full catalogue instead of "0 products" with filters.
-    const q = typeof sp.q === "string" ? sp.q.trim().slice(0, 100) : "";
-    const page = typeof sp.page === "string" && /^\d{1,6}$/.test(sp.page) ? Math.max(1, Number(sp.page)) : 1;
-    let result: CatalogPage | null = null;
-    let failed = false;
-    try {
-      result = await listCatalogItems({ q, page });
-    } catch (e) {
-      failed = true;
-      console.error("catalog items failed", (e as Error).message.slice(0, 200));
-    }
+  const path = categoryPath(node, tree.byId);
+  const crumbs = [
+    { label: t.common.home, href: localizedPath(locale, "/") },
+    { label: t.catalog.title, href: localizedPath(locale, "/catalog") },
+    ...path.map((c, i) => (i === path.length - 1 ? { label: c.name } : { label: c.name, href: localizedPath(locale, `/catalog/${c.slug}`) })),
+  ];
+  // Catalogue products (public.pharmacy_products) with a published section: the real assortment.
+  if (store.catalogCategoryCounts.has(node.id)) {
+    const listing = await loadCatalogListing({ locale, searchParams: sp, section: node });
     return (
       <CatalogItemsView
         locale={locale}
         t={t}
         title={node.name}
-        crumbs={[
-          { label: t.common.home, href: localizedPath(locale, "/") },
-          { label: t.catalog.title, href: localizedPath(locale, "/catalog") },
-          { label: node.name },
-        ]}
+        crumbs={crumbs}
+        basePath={localizedPath(locale, `/catalog/${node.slug}`)}
+        query={listing.query}
+        result={listing.result}
+        failed={listing.failed}
+        filters={listing.filters}
+        baseUrl={env.appUrl}
+      />
+    );
+  }
+  if (!store.categoryIdsWithProducts.has(node.id)) {
+    // No products in this section yet: say so plainly and show the full catalogue instead of "0 products".
+    const listing = await loadCatalogListing({ locale, searchParams: sp });
+    return (
+      <CatalogItemsView
+        locale={locale}
+        t={t}
+        title={node.name}
+        crumbs={crumbs}
         basePath={localizedPath(locale, "/catalog")}
-        q={q}
-        result={result}
-        failed={failed}
+        query={listing.query}
+        result={listing.result}
+        failed={listing.failed}
+        filters={listing.filters}
         baseUrl={env.appUrl}
         before={
           <Notice tone="info" className="mt-4">
@@ -71,6 +84,7 @@ export default async function CategoryPage({ params, searchParams }: PageProps<"
       />
     );
   }
+  // SKU-level products (demo/structured data) keep their own listing with brand and form filters.
   const filters = parseCatalogParams(sp);
   filters.q = undefined;
   const pharmacy = await getSelectedPharmacy(locale);
@@ -79,7 +93,6 @@ export default async function CategoryPage({ params, searchParams }: PageProps<"
     listVariants({ locale, pharmacyId: pharmacy?.id ?? null, categoryIds: ids, filters }),
     getFacets({ pharmacyId: pharmacy?.id ?? null, categoryIds: ids }),
   ]);
-  const path = categoryPath(node, tree.byId);
   return (
     <CatalogView
       locale={locale}

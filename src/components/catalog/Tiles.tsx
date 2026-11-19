@@ -1,5 +1,5 @@
 import Link from "next/link";
-import type { Dictionary, Locale } from "@/lib/i18n";
+import { getDictionary, type Dictionary, type Locale } from "@/lib/i18n";
 import { dataLang, fmt, localeTags, localizedPath } from "@/lib/i18n/config";
 import { formatDate, formatKzt, formatPhone, telHref } from "@/lib/format";
 import type { PharmacyView } from "@/server/pharmacies";
@@ -19,7 +19,7 @@ export function CategoryTile({ slug, name, iconKey, locale, count }: { slug: str
       </span>
       <span className="min-w-0 flex-1">
         <span className="block leading-snug font-semibold text-ink">{name}</span>
-        {count !== undefined ? <span className="text-sm text-muted">{count}</span> : null}
+        {count !== undefined ? <span className="text-sm text-muted">{fmt(getDictionary(locale).items.total, { count: count.toLocaleString(localeTags[locale]) })}</span> : null}
       </span>
       <Icon name="chevronRight" size={18} className="shrink-0 text-line-strong transition-colors group-hover:text-brand-600" />
     </Link>

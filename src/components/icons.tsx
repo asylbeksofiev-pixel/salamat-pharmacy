@@ -15,6 +15,7 @@ const paths = {
   chevronDown: <path d="m6 9.5 6 6 6-6" />,
   grid: <><rect x="4" y="4" width="6.5" height="6.5" rx="1.5" /><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.5" /><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.5" /><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.5" /></>,
   filter: <><path d="M4 6h16" /><path d="M7 12h10" /><path d="M10 18h4" /></>,
+  sort: <><path d="M7 5v14" /><path d="m4 8 3-3 3 3" /><path d="M17 19V5" /><path d="m14 16 3 3 3-3" /></>,
   check: <path d="m5 12.5 4.5 4.5L19 7.5" />,
   copy: <><rect x="8.5" y="8.5" width="11" height="11" rx="2" /><path d="M15.5 8.5V6.5a2 2 0 0 0-2-2h-7a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h2" /></>,
   zoom: <><circle cx="11" cy="11" r="6.5" /><path d="m16 16 4.5 4.5" /><path d="M11 8.5v5" /><path d="M8.5 11h5" /></>,
