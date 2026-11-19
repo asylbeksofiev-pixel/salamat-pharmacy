@@ -594,12 +594,14 @@ async function runReviewExport() {
   await mkdir(paths.review, { recursive: true });
   const csv = (list: PhotoResult[], extra: Record<string, string> = {}) =>
     "﻿" + Papa.unparse(list.map((r) => ({ ...reviewRow(r), ...extra })), { columns: [...REVIEW_COLUMNS, ...Object.keys(extra)] });
-  const confirmed = rows.filter((r) => publishable(r));
+  const confirmed = rows.filter((r) => publishable(r, { requireReview: true }));
   const probable = rows.filter(
-    (r) => (r.match_status === "probable" || (r.match_status === "confirmed" && !publishable(r))) && r.review_status !== "rejected" && r.source_image_url && !r.error,
+    // Still waiting for a person: approved and rejected rows are already decided.
+    (r) => (r.match_status === "probable" || r.match_status === "confirmed") && r.review_status === "auto" && !publishable(r, { requireReview: true }) && r.source_image_url && !r.error,
   );
   const failed = rows.filter((r) => !!r.error);
   await writeFile(join(paths.review, "photo-results.csv"), csv(rows));
+  // Ready to publish: confirmed or probable, approved by a person (publish requires the approval by default).
   await writeFile(join(paths.review, "confirmed_photos.csv"), csv(confirmed));
   // "decision": a reviewer writes approve / reject; `publish --from-review` publishes the approved rows.
   await writeFile(join(paths.review, "probable_photos_review.csv"), csv(probable, { decision: "" }));
