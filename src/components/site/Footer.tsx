@@ -10,7 +10,7 @@ export function Footer({ locale, t, helpline, company, categories, orderingEnabl
   const href = (p: string) => localizedPath(locale, p);
   const year = new Date().getFullYear();
   return (
-    <footer className="mt-16 border-t border-line bg-surface pb-24 md:pb-0">
+    <footer className="mt-16 border-t border-line bg-surface pb-[calc(6rem+var(--sal-actionbar-h,0px))] md:pb-0">
       <div className="container-page grid gap-10 py-12 sm:grid-cols-2 lg:grid-cols-[1.3fr_1fr_1fr_1fr]">
         <div className="flex flex-col gap-4">
           <Image src="/brand/salamat-logo.png" alt="SALAMAT" width={1450} height={366} className="h-9 w-auto self-start" />

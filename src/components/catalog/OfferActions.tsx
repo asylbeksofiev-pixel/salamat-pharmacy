@@ -13,11 +13,12 @@ import { Icon } from "../icons";
 import { cn } from "../ui/cn";
 import { useSite } from "../site/SiteProvider";
 
-export function QuantitySelector({ value, onChange, max, labels, size = "md" }: { value: number; onChange: (n: number) => void; max: number; labels: { quantity: string; decrease: string; increase: string }; size?: "sm" | "md" }) {
-  const h = size === "sm" ? "h-9" : "h-11";
+export function QuantitySelector({ value, onChange, max, labels, size = "md" }: { value: number; onChange: (n: number) => void; max: number; labels: { quantity: string; decrease: string; increase: string }; size?: "sm" | "md" | "lg" }) {
+  const h = size === "sm" ? "h-9" : size === "lg" ? "h-13" : "h-11";
+  const btn = size === "sm" ? "size-9" : size === "lg" ? "h-13 w-12" : "size-11";
   return (
     <div className={cn("inline-flex items-center rounded-[var(--radius-md)] border border-line-strong bg-white", h)} role="group" aria-label={labels.quantity}>
-      <button type="button" className={cn("grid place-items-center text-ink-soft hover:text-brand-700 disabled:opacity-40", size === "sm" ? "size-9" : "size-11")} onClick={() => onChange(value - 1)} disabled={value <= 1} aria-label={labels.decrease}>
+      <button type="button" className={cn("grid place-items-center text-ink-soft transition-[color,scale] duration-150 hover:text-brand-700 disabled:opacity-40 motion-safe:active:scale-90", btn)} onClick={() => onChange(value - 1)} disabled={value <= 1} aria-label={labels.decrease}>
         <Icon name="minus" size={18} />
       </button>
       <input
@@ -33,14 +34,15 @@ export function QuantitySelector({ value, onChange, max, labels, size = "md" }: 
         }}
         className="w-10 [appearance:textfield] bg-transparent text-center font-semibold outline-none [&::-webkit-inner-spin-button]:appearance-none"
       />
-      <button type="button" className={cn("grid place-items-center text-ink-soft hover:text-brand-700 disabled:opacity-40", size === "sm" ? "size-9" : "size-11")} onClick={() => onChange(value + 1)} disabled={value >= max} aria-label={labels.increase}>
+      <button type="button" className={cn("grid place-items-center text-ink-soft transition-[color,scale] duration-150 hover:text-brand-700 disabled:opacity-40 motion-safe:active:scale-90", btn)} onClick={() => onChange(value + 1)} disabled={value >= max} aria-label={labels.increase}>
         <Icon name="plus" size={18} />
       </button>
     </div>
   );
 }
 
-export function FavoriteButton({ variantId, className }: { variantId: string; className?: string }) {
+/** `quiet`: no toast (the filled heart and aria-pressed confirm it) — used where a toast could cover the price. */
+export function FavoriteButton({ variantId, className, quiet = false }: { variantId: string; className?: string; quiet?: boolean }) {
   const { t, href } = useSite();
   const toast = useToast();
   const hydrated = useHydrated();
@@ -55,6 +57,7 @@ export function FavoriteButton({ variantId, className }: { variantId: string; cl
         const adding = !favs.includes(variantId);
         favoritesStore.toggle(variantId);
         setFx((prev) => ({ kind: adding ? "add" : "remove", n: (prev?.n ?? 0) + 1 }));
+        if (quiet) return;
         if (adding) toast(t.request.favoriteAdded, "success", { label: t.common.favorites, href: href("/favorites") });
         else toast(t.request.favoriteRemoved, "info");
       }}
@@ -93,28 +96,30 @@ export function CatalogCartButton({ id, name, size = "md", className }: { id: st
     if (added && inCart) linkRef.current?.focus({ preventScroll: true });
   }, [added, inCart]);
   if (!orderingEnabled) return null;
+  // Long labels (Kazakh, English) wrap to a second line instead of being cut; the icon gives way on narrow cards.
   const cls = cn("w-full gap-1.5 px-2.5", size === "md" && "text-sm sm:text-[0.95rem]", className);
   if (inCart) {
     return (
       <Link
         ref={linkRef}
         href={href("/cart")}
-        className={buttonClass("secondary", size, cls)}
+        className={buttonClass("secondary", size, cls, true)}
         // The second tap of a quick double-tap lands here: it must not take the visitor away from the page.
         onClick={(e) => {
           if (Date.now() - addedAt.current < 500) e.preventDefault();
         }}
       >
-        <span key={added} className={cn("grid place-items-center", added > 0 && "sal-cart-pop")}>
+        <span key={added} className={cn("grid shrink-0 place-items-center", added > 0 && "sal-cart-pop")}>
           <Icon name="check" size={18} />
         </span>
-        <span className="truncate">{t.offer.inCart}</span>
+        <span className="min-w-0 text-center">{t.offer.inCart}</span>
       </Link>
     );
   }
   return (
     <Button
       size={size}
+      wrap
       className={cls}
       onClick={(e) => {
         // A quick second tap (before the button turns into "In cart") must not add a second unit.
@@ -126,8 +131,8 @@ export function CatalogCartButton({ id, name, size = "md", className }: { id: st
         toast(t.request.added, "success", { label: t.common.cart, href: href("/cart") });
       }}
     >
-      <Icon name="cart" size={18} className="shrink-0" />
-      <span className="truncate">{t.offer.addToCart}</span>
+      <Icon name="cart" size={18} className="shrink-0 max-[399px]:hidden" />
+      <span className="min-w-0 text-center">{t.offer.addToCart}</span>
     </Button>
   );
 }
