@@ -6,6 +6,7 @@ import sharp from "sharp";
 import { OPEN_FACTS_SITES, fullImageUrl, loadOpenFactsExport, type OpenFactsProduct } from "../../scripts/catalog-photos/openfacts";
 import { checkImage, discoverOne, publishable, storedFile, type PhotoResult } from "../../scripts/catalog-photos/internet";
 import { blobPathname, isBlobProductPhoto } from "@/lib/catalog-photos/blob-url";
+import { isOpenFactsPhotoUrl } from "@/lib/catalog-photos/photo-hosts";
 import { sameWord } from "@/lib/catalog-photos/similarity";
 
 const obf = OPEN_FACTS_SITES.find((s) => s.code === "obf")!;
@@ -194,5 +195,18 @@ describe("Vercel Blob names", () => {
     expect(isBlobProductPhoto("http://abc123.public.blob.vercel-storage.com/products/1/a.webp")).toBe(false);
     expect(isBlobProductPhoto("https://evil.example.org/products/1/a.webp")).toBe(false);
     expect(isBlobProductPhoto("not a url")).toBe(false);
+  });
+});
+
+describe("direct links to Open Facts photos", () => {
+  it("accepts only product photos on the Open Facts image servers", () => {
+    expect(isOpenFactsPhotoUrl("https://images.openbeautyfacts.org/images/products/340/157/564/5851/front_fr.6.full.jpg")).toBe(true);
+    expect(isOpenFactsPhotoUrl("https://images.openfoodfacts.org/images/products/460/567/400/0019/front_ru.5.full.jpg")).toBe(true);
+    expect(isOpenFactsPhotoUrl("https://images.openproductsfacts.org/images/products/1/front.3.full.jpg")).toBe(true);
+    expect(isOpenFactsPhotoUrl("http://images.openfoodfacts.org/images/products/1/front.3.full.jpg")).toBe(false);
+    expect(isOpenFactsPhotoUrl("https://images.openfoodfacts.org/images/products/1/front.3.full.jpg?x=1")).toBe(false);
+    expect(isOpenFactsPhotoUrl("https://images.openfoodfacts.org/other/1.jpg")).toBe(false);
+    expect(isOpenFactsPhotoUrl("https://images.openfoodfacts.org.evil.example/images/products/1.jpg")).toBe(false);
+    expect(isOpenFactsPhotoUrl("https://world.openfoodfacts.org/images/products/1.jpg")).toBe(false);
   });
 });

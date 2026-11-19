@@ -137,6 +137,29 @@ npm run photos:report
 колонке всё ещё URL этого прогона (фото, заменённое вручную, не трогается). `--delete-files` дополнительно удаляет
 файлы из Blob.
 
+## Публикация прямыми ссылками (без Vercel Blob)
+
+Как и фото NCT, фото Open Facts можно публиковать исходной публичной ссылкой: `image_url` получает
+`https://images.open…facts.org/images/products/…full.jpg`, файл никуда не копируется, `BLOB_READ_WRITE_TOKEN` не нужен.
+
+1. `npm run photos:verify-external` — для каждого одобренного фото заново скачивает исходный URL так, как его
+   загрузит браузер на сайте (без авторизации и cookies, Referer — сайт), проверяет HTTP 200, `image/*`, отсутствие
+   `Cross-Origin-Resource-Policy: same-origin`, декодирование и что после той же обработки получается **тот же
+   SHA-256**, что у просмотренного файла. Изменившийся или недоступный файл возвращается на проверку
+   (`review_status = auto`).
+2. Вариант А, из этой машины (нужен `DATABASE_URL`):
+   `npm run photos:publish -- --storage external --dry-run`, затем `--confirm`.
+   Вариант Б, через psql: `npm run photos:neon-import-csv` и SQL из
+   [`data/catalog-photos-internet/neon-import/`](../data/catalog-photos-internet/neon-import/README.md).
+3. Аудит: `storage = 'external_url'`, `published_image_url` = значение `image_url` = `source_image_url`,
+   `stored_image_url` пустой (исходная ссылка никогда не выдаётся за файл в Blob — это запрещает CHECK-ограничение).
+   Подпись источника (авторы, лицензия, ссылка на страницу товара в Open Facts) выводится, только пока `image_url`
+   совпадает с `published_image_url`.
+4. Отображение: `next.config.ts` разрешает `images.open{food,beauty,products}facts.org/images/products/**` для
+   next/image, поэтому оригиналы (медиана 3 773 px и 614 КБ) уменьшаются и кэшируются сайтом; CSP уже разрешает
+   `img-src https:`. Нужен деплой. Оптимизация изображений на Vercel тарифицируется: 576 фото × 2–3 размера —
+   около 1 700 преобразований при первом показе.
+
 ## Настройка (один раз, владелец проекта Vercel)
 
 1. Vercel → проект `salamat-pharmacy` → **Storage** → **Create** → **Blob** → создать публичное хранилище

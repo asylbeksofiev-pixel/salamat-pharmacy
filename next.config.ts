@@ -39,6 +39,14 @@ const nextConfig: NextConfig = {
       // Product photos stored by scripts/catalog-photos/internet.ts in the project's public Vercel Blob store
       // (<store-id>.public.blob.vercel-storage.com/products/<product id>/<sha256>.<ext>). Only that folder, no query.
       { protocol: "https" as const, hostname: "*.public.blob.vercel-storage.com", pathname: "/products/**", search: "" },
+      // Open Facts product photos linked directly from image_url (CC BY-SA; see src/lib/catalog-photos/photo-hosts.ts).
+      // Optimised by the site: the originals are several thousand pixels wide.
+      ...["images.openfoodfacts.org", "images.openbeautyfacts.org", "images.openproductsfacts.org"].map((hostname) => ({
+        protocol: "https" as const,
+        hostname,
+        pathname: "/images/products/**",
+        search: "",
+      })),
     ],
   },
   serverExternalPackages: ["exceljs", "nodemailer"],

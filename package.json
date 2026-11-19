@@ -30,7 +30,9 @@
     "photos:publish": "tsx scripts/catalog-photos/internet.ts publish",
     "photos:rollback": "tsx scripts/catalog-photos/internet.ts rollback",
     "photos:report": "tsx scripts/catalog-photos/internet.ts report",
-    "photos:apply-review": "tsx scripts/catalog-photos/internet.ts apply-review"
+    "photos:apply-review": "tsx scripts/catalog-photos/internet.ts apply-review",
+    "photos:verify-external": "tsx scripts/catalog-photos/internet.ts verify-external",
+    "photos:neon-import-csv": "tsx scripts/catalog-photos/internet.ts neon-import-csv"
   },
   "dependencies": {
     "@fontsource-variable/onest": "^5.3.1",

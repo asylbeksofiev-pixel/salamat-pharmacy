@@ -32,7 +32,8 @@ import { OPEN_FACTS_LICENSE, OPEN_FACTS_SITES, asCard, loadOpenFactsExport, type
 import { classifyArticle } from "../../src/lib/catalog-photos/barcode";
 import { assessNctCard, GRADE_ORDER, type NctAssessment } from "../../src/lib/catalog-photos/nct-match";
 import type { ProductRef } from "../../src/lib/catalog-photos/product";
-import { blobPathname } from "../../src/lib/catalog-photos/blob-url";
+import { blobPathname, isBlobProductPhoto } from "../../src/lib/catalog-photos/blob-url";
+import { isOpenFactsPhotoUrl } from "../../src/lib/catalog-photos/photo-hosts";
 
 // ---------------------------------------------------------------- options
 
@@ -132,7 +133,21 @@ export interface PhotoResult {
   validated_at: string | null;
   published_at: string | null;
   run_id: string | null;
+  /** How the published photo is served: a file in SALAMAT's Vercel Blob store, or the source's own public URL. */
+  storage?: Storage_ | "";
+  /** The value written into pharmacy_products.image_url (Blob URL or the source URL). */
+  published_image_url?: string;
+  /** Check of the source URL right before an external-URL publication (verify-external). */
+  source_sha256?: string;
+  source_bytes?: number | null;
+  source_content_type?: string;
+  source_width?: number | null;
+  source_height?: number | null;
+  source_checked_at?: string | null;
+  source_check_error?: string;
 }
+
+export type Storage_ = "vercel_blob" | "external_url";
 
 async function readResults(): Promise<Map<string, PhotoResult>> {
   const out = new Map<string, PhotoResult>();
@@ -643,6 +658,142 @@ async function runApplyReview() {
   if (stale) console.log(`Не применено одобрений: ${stale} — файл изменился после проверки или в CSV нет sha256; эти фото снова ждут проверки`);
 }
 
+// ---------------------------------------------------------------- verify-external
+
+/** Approved photos that may be published (confirmed or probable, licensed, checked file, approved by a person). */
+export const approvedForPublication = (r: PhotoResult) => publishable(r, { requireReview: true });
+
+/**
+ * Hosts whose files may be put into image_url as they are (direct links): the Open Facts image servers.
+ * Their photos are CC BY-SA; the credit is kept in catalog_photo_results and shown under the photo.
+ */
+export const isExternalPhotoUrl = isOpenFactsPhotoUrl;
+
+/**
+ * Re-downloads the source of every approved photo the way a browser on the SALAMAT site would (no cookies, no
+ * authorisation, Referer = the site) and checks that it is still the file a person approved: same picture after
+ * the same processing (SHA-256 of the processed file equals the reviewed one). A changed or broken source sends the
+ * product back to review. Records the source's own SHA-256, size, type and dimensions.
+ */
+async function runVerifyExternal() {
+  const results = await readResults();
+  const ids = opt("product-id")?.split(",");
+  const todo = [...results.values()].filter((r) => approvedForPublication(r) && (!ids || ids.includes(r.product_id))).slice(0, num("limit", Infinity));
+  console.log(`Одобренных фото к проверке ссылки: ${todo.length}`);
+  const http = new Http({ userAgent, maxRetries: 3, log: (e) => void journal(e) });
+  const concurrency = Math.max(1, Math.min(4, num("concurrency", 3)));
+  const out: PhotoResult[] = [];
+  const counts: Record<string, number> = {};
+  const bump = (k: string) => (counts[k] = (counts[k] ?? 0) + 1);
+  let next = 0;
+  await Promise.all(
+    Array.from({ length: concurrency }, async () => {
+      while (next < todo.length) {
+        const r = { ...todo[next++] };
+        const problems: string[] = [];
+        let changed = false;
+        if (!isExternalPhotoUrl(r.source_image_url)) problems.push("not_a_direct_open_facts_image_url");
+        else {
+          try {
+            const res = await http.fetchBytes(r.source_image_url, {
+              maxBytes: 20_000_000,
+              timeoutMs: 60_000,
+              credentials: "omit",
+              headers: { Accept: "image/avif,image/webp,image/png,image/jpeg,image/*;q=0.8", Referer: `${siteUrl}/` },
+            });
+            const type = (res.headers.get("content-type") ?? "").split(";")[0].trim();
+            const corp = (res.headers.get("cross-origin-resource-policy") ?? "").toLowerCase();
+            if (res.status !== 200) problems.push(`http_${res.status}`);
+            else {
+              if (!/^image\//.test(type)) problems.push(`not_image:${type || "none"}`);
+              if (corp === "same-origin" || corp === "same-site") problems.push(`blocked_cross_origin:${corp}`);
+              const check = await checkImage(res.body, type);
+              if (!check.ok) problems.push(...check.errors);
+              else {
+                const file = await storedFile(res.body, check);
+                const sha = createHash("sha256").update(file.buffer).digest("hex");
+                if (sha !== r.sha256) changed = true;
+                r.source_sha256 = createHash("sha256").update(res.body).digest("hex");
+                r.source_bytes = res.body.length;
+                r.source_content_type = type;
+                r.source_width = check.width;
+                r.source_height = check.height;
+              }
+            }
+          } catch (e) {
+            problems.push(`download_failed:${(e as Error).message.slice(0, 80)}`);
+          }
+        }
+        r.source_checked_at = new Date().toISOString();
+        r.source_check_error = changed ? "source_changed_after_review" : problems.join("; ");
+        if (changed || problems.length) {
+          // Not the reviewed picture any more (or not reachable): a person has to look again.
+          r.review_status = "auto";
+          r.reason = [r.reason, changed ? "source_changed_after_review" : `source_check_failed:${problems.join(",")}`].filter(Boolean).join("; ");
+          bump(changed ? "changed" : "failed");
+        } else bump("ok");
+        out.push(r);
+        if (out.length >= 50) await writeResults(out.splice(0));
+        const done = (counts.ok ?? 0) + (counts.changed ?? 0) + (counts.failed ?? 0);
+        if (done % 100 === 0) console.log(`  проверено: ${done}/${todo.length}`);
+      }
+    }),
+  );
+  await writeResults(out);
+  await journal({ event: "verify_external", checked: todo.length, counts, http: http.summary() });
+  console.log(`Проверено ссылок: ${todo.length} — ${JSON.stringify(counts)}`);
+}
+
+// ---------------------------------------------------------------- neon-import (psql)
+
+/** Columns of the CSV loaded with \copy into public.catalog_photo_import_openfacts (see neon-import/*.sql). */
+export const NEON_IMPORT_COLUMNS = [
+  "product_id", "article", "product_name", "image_url", "source_name", "source_page_url", "attribution", "source_license",
+  "rights_status", "match_status", "match_method", "confidence", "manufacturer", "detected_gtin", "width", "height",
+  "file_size", "sha256", "source_sha256", "source_bytes", "source_checked_at", "checked_at", "review_note",
+] as const;
+
+/**
+ * Writes the approved photos whose source URL was verified (verify-external) as a UTF-8 CSV for a psql import that
+ * fills image_url with the source's own URL (storage = external_url). No database access.
+ */
+async function runNeonImportCsv() {
+  const results = [...(await readResults()).values()].sort((a, b) => Number(a.product_id) - Number(b.product_id));
+  const approved = results.filter(approvedForPublication);
+  const ready = approved.filter((r) => isExternalPhotoUrl(r.source_image_url) && !!r.source_sha256 && !r.source_check_error);
+  const dir = resolve(opt("out") ?? join(paths.review, "neon-import"));
+  await mkdir(dir, { recursive: true });
+  const rows = ready.map((r) => ({
+    product_id: r.product_id,
+    article: r.article,
+    product_name: r.product_name,
+    image_url: r.source_image_url,
+    source_name: r.source_name,
+    source_page_url: r.source_page_url,
+    attribution: r.attribution,
+    source_license: r.source_license,
+    rights_status: r.rights_status,
+    match_status: r.match_status,
+    match_method: r.match_method,
+    confidence: r.confidence.toFixed(2),
+    manufacturer: r.manufacturer,
+    detected_gtin: r.detected_gtin,
+    width: r.width ?? "",
+    height: r.height ?? "",
+    file_size: r.file_size ?? "",
+    sha256: r.sha256,
+    source_sha256: r.source_sha256,
+    source_bytes: r.source_bytes ?? "",
+    source_checked_at: r.source_checked_at,
+    checked_at: r.validated_at ?? r.checked_at,
+    review_note: (r.reason.split("; ").find((t) => t.startsWith("review_approved")) ?? "review_approved").slice(0, 300),
+  }));
+  // No BOM: psql \copy reads the header line as data otherwise; CRLF-free, quoted where needed (Papa.unparse).
+  const file = join(dir, "openfacts_approved_photos.csv");
+  await writeFile(file, Papa.unparse(rows, { columns: [...NEON_IMPORT_COLUMNS], newline: "\n" }) + "\n");
+  console.log(`CSV для импорта: ${file} — ${rows.length} строк (одобрено ${approved.length}, без проверенной ссылки ${approved.length - ready.length})`);
+}
+
 // ---------------------------------------------------------------- publish
 
 interface Storage {
@@ -682,6 +833,10 @@ function testStorage(): Storage {
 async function runPublish() {
   const dry = flag("dry-run");
   if (!dry && !flag("confirm")) throw new Error("publish: укажите --dry-run (план без изменений) или --confirm (загрузить в Blob и записать в Neon)");
+  // --storage external: image_url gets the source's own public URL (checked by verify-external); nothing is copied and
+  // no Blob token is needed. Default: a copy in Vercel Blob.
+  const storageKind: Storage_ = (opt("storage") ?? "blob") === "external" ? "external_url" : "vercel_blob";
+  const external = storageKind === "external_url";
   const results = await readResults();
   const ids = opt("product-id")?.split(",");
   // Approved by a reviewer in probable_photos_review.csv (decision = approve).
@@ -698,20 +853,23 @@ async function runPublish() {
       ((publishable(r, { requireReview: !flag("allow-unreviewed") }) && !flag("from-review")) || (approved.has(r.product_id) && matchAllowsPublication(r) && !!r.sha256 && !r.error && licensed(r))),
   );
   if (flag("confirmed-only")) plan = plan.filter((r) => r.match_status === "confirmed");
-  plan = plan.filter((r) => r.stage !== "published" && (!ids || ids.includes(r.product_id))).slice(0, num("limit", Infinity));
+  plan = plan.filter((r) => r.stage !== "published" && (!ids || ids.includes(r.product_id)));
+  // A direct link is published only after verify-external confirmed it still serves the reviewed picture.
+  if (external) plan = plan.filter((r) => isExternalPhotoUrl(r.source_image_url) && !!r.source_sha256 && !r.source_check_error);
+  plan = plan.slice(0, num("limit", Infinity));
   const runId = opt("run-id") ?? `photos-${new Date().toISOString().replace(/[:.]/g, "-")}`;
   await mkdir(paths.review, { recursive: true });
   await writeFile(
     join(workDir, `publish-plan-${runId}.csv`),
-    "﻿" + Papa.unparse(plan.map((r) => ({ run_id: runId, product_id: r.product_id, name: r.product_name, file: r.local_file, pathname: blobPathname(r.product_id, r.sha256, r.stored_ext), source: r.source_page_url, license: r.source_license }))),
+    "﻿" + Papa.unparse(plan.map((r) => ({ run_id: runId, product_id: r.product_id, name: r.product_name, storage: storageKind, image_url: external ? r.source_image_url : blobPathname(r.product_id, r.sha256, r.stored_ext), source: r.source_page_url, license: r.source_license }))),
   );
-  console.log(`План ${runId}: ${plan.length} фото (${dry ? "dry-run, без изменений" : "публикация"})`);
+  console.log(`План ${runId}: ${plan.length} фото, хранение ${storageKind} (${dry ? "dry-run, без изменений" : "публикация"})`);
   if (dry) {
-    for (const r of plan.slice(0, 10)) console.log(`  ${r.product_id} → products/${r.product_id}/${r.sha256}.${r.stored_ext} (${r.source_name})`);
+    for (const r of plan.slice(0, 10)) console.log(`  ${r.product_id} → ${external ? r.source_image_url : blobPathname(r.product_id, r.sha256, r.stored_ext)} (${r.source_name})`);
     return;
   }
   if (!dbUrl()) throw new Error("Нужен DATABASE_URL базы Neon сайта");
-  const storage = process.env.PHOTOS_STORAGE === "test" ? testStorage() : await blobStorage();
+  const storage = external ? null : process.env.PHOTOS_STORAGE === "test" ? testStorage() : await blobStorage();
   const { PrismaClient } = await import("@prisma/client");
   const prisma = new PrismaClient({ datasources: { db: { url: dbUrl() } } });
   const published: PhotoResult[] = [];
@@ -727,8 +885,11 @@ async function runPublish() {
           await journal({ event: "publish_skip", run_id: runId, product_id: r.product_id, reason: cur ? "has_image" : "no_product" });
           continue;
         }
-        const pathname = blobPathname(r.product_id, r.sha256, r.stored_ext);
-        const url = await storage.put(pathname, await readFile(r.local_file), r.stored_ext === "jpg" ? "image/jpeg" : `image/${r.stored_ext}`);
+        const url = external
+          ? r.source_image_url
+          : await storage!.put(blobPathname(r.product_id, r.sha256, r.stored_ext), await readFile(r.local_file), r.stored_ext === "jpg" ? "image/jpeg" : `image/${r.stored_ext}`);
+        // The audit never presents a source URL as a stored copy: stored_image_url is set only for Blob files.
+        const done: Partial<PhotoResult> = { storage: storageKind, published_image_url: url, stored_image_url: external ? "" : url };
         const updated = await prisma.$transaction(async (tx) => {
           const n = await tx.$executeRaw`
             UPDATE public.pharmacy_products SET image_url = ${url}
@@ -737,14 +898,14 @@ async function runPublish() {
           await tx.$executeRaw`
             INSERT INTO catalog_photo_changes (run_id, product_id, previous_image_url, new_image_url)
             VALUES (${runId}, ${BigInt(r.product_id)}, ${cur.image_url}, ${url})`;
-          await upsertAudit(tx, { ...r, stored_image_url: url, review_status: "published", published_at: new Date().toISOString(), run_id: runId });
+          await upsertAudit(tx, { ...r, ...done, review_status: "published", published_at: new Date().toISOString(), run_id: runId });
           return true;
         });
         if (!updated) {
           skipped++;
           continue;
         }
-        published.push({ ...r, stored_image_url: url, stage: "published", review_status: "published", published_at: new Date().toISOString(), run_id: runId });
+        published.push({ ...r, ...done, stage: "published", review_status: "published", published_at: new Date().toISOString(), run_id: runId });
         if (published.length % 50 === 0) {
           await writeResults(published.slice(-50));
           console.log(`  опубликовано: ${published.length}/${plan.length}`);
@@ -767,7 +928,7 @@ async function runPublish() {
   } finally {
     await prisma.$disconnect();
   }
-  await journal({ event: "publish", run_id: runId, storage: storage.name, planned: plan.length, published: published.length, skipped, failed });
+  await journal({ event: "publish", run_id: runId, storage: storage?.name ?? storageKind, planned: plan.length, published: published.length, skipped, failed });
   console.log(`run_id ${runId}: опубликовано ${published.length}, пропущено ${skipped}, ошибок ${failed}. Откат: npm run photos:rollback -- --run-id ${runId} --confirm`);
 }
 
@@ -778,16 +939,27 @@ async function upsertAudit(tx: Tx, r: PhotoResult) {
   await tx.$executeRaw`
     INSERT INTO catalog_photo_results (product_id, article, product_name, match_status, match_method, confidence, source_name, source_page_url,
       source_image_url, stored_image_url, source_license, rights_status, attribution, manufacturer, detected_gtin, width, height, file_size,
-      sha256, review_status, reason, error, run_id, checked_at, published_at, updated_at)
+      sha256, review_status, reason, error, run_id, checked_at, published_at, updated_at,
+      storage, published_image_url, source_sha256, source_bytes, source_checked_at)
     VALUES (${BigInt(r.product_id)}, ${r.article || null}, ${r.product_name}, ${r.match_status}, ${r.match_method}, ${r.confidence},
       ${r.source_name || null}, ${r.source_page_url || null}, ${r.source_image_url || null}, ${r.stored_image_url || null}, ${r.source_license || null},
       ${r.rights_status}, ${r.attribution || null}, ${r.manufacturer || null}, ${r.detected_gtin || null}, ${r.width}, ${r.height}, ${r.file_size},
       ${r.sha256 || null}, ${r.review_status}, ${r.reason || null}, ${r.error || null}, ${r.run_id}, ${new Date(r.validated_at ?? r.checked_at)},
-      ${r.published_at ? new Date(r.published_at) : null}, now())
+      ${r.published_at ? new Date(r.published_at) : null}, now(),
+      ${r.storage || null}, ${r.published_image_url || null}, ${r.source_sha256 || null}, ${r.source_bytes ?? null},
+      ${r.source_checked_at ? new Date(r.source_checked_at) : null})
     ON CONFLICT (product_id) DO UPDATE SET
       article = EXCLUDED.article, product_name = EXCLUDED.product_name, match_status = EXCLUDED.match_status, match_method = EXCLUDED.match_method,
       confidence = EXCLUDED.confidence, source_name = EXCLUDED.source_name, source_page_url = EXCLUDED.source_page_url,
-      source_image_url = EXCLUDED.source_image_url, stored_image_url = COALESCE(EXCLUDED.stored_image_url, catalog_photo_results.stored_image_url),
+      source_image_url = EXCLUDED.source_image_url,
+      stored_image_url = CASE WHEN EXCLUDED.review_status = 'published' THEN EXCLUDED.stored_image_url
+                              ELSE COALESCE(EXCLUDED.stored_image_url, catalog_photo_results.stored_image_url) END,
+      storage = CASE WHEN EXCLUDED.review_status = 'published' THEN EXCLUDED.storage ELSE catalog_photo_results.storage END,
+      published_image_url = CASE WHEN EXCLUDED.review_status = 'published' THEN EXCLUDED.published_image_url
+                                 ELSE catalog_photo_results.published_image_url END,
+      source_sha256 = COALESCE(EXCLUDED.source_sha256, catalog_photo_results.source_sha256),
+      source_bytes = COALESCE(EXCLUDED.source_bytes, catalog_photo_results.source_bytes),
+      source_checked_at = COALESCE(EXCLUDED.source_checked_at, catalog_photo_results.source_checked_at),
       source_license = EXCLUDED.source_license, rights_status = EXCLUDED.rights_status, attribution = EXCLUDED.attribution,
       manufacturer = EXCLUDED.manufacturer, detected_gtin = EXCLUDED.detected_gtin, width = EXCLUDED.width, height = EXCLUDED.height,
       file_size = EXCLUDED.file_size, sha256 = EXCLUDED.sha256, review_status = EXCLUDED.review_status, reason = EXCLUDED.reason,
@@ -832,7 +1004,8 @@ async function runRollback() {
       });
       if (ok) {
         revertedIds.push(c.product_id.toString());
-        if (storage?.del) await storage.del(c.new_image_url).catch(() => undefined);
+        // Only SALAMAT's own Blob copies are deleted; a source's URL (external_url) is never touched.
+        if (storage?.del && isBlobProductPhoto(c.new_image_url)) await storage.del(c.new_image_url).catch(() => undefined);
       } else kept++;
     }
     const results = await readResults();
@@ -840,7 +1013,7 @@ async function runRollback() {
       revertedIds
         .map((id) => results.get(id))
         .filter((r): r is PhotoResult => !!r)
-        .map((r) => ({ ...r, stage: "validated" as const, review_status: "rolled_back" as const, stored_image_url: "", published_at: null })),
+        .map((r) => ({ ...r, stage: "validated" as const, review_status: "rolled_back" as const, stored_image_url: "", published_image_url: "", published_at: null })),
     );
     await journal({ event: "rollback", run_id: runId, reverted: revertedIds.length, kept });
     console.log(`Откачено: ${revertedIds.length}; не тронуто (фото уже изменено вручную): ${kept}`);
@@ -887,6 +1060,8 @@ const commands: Record<string, () => Promise<void>> = {
   validate: runValidate,
   "review-export": runReviewExport,
   "apply-review": runApplyReview,
+  "verify-external": runVerifyExternal,
+  "neon-import-csv": runNeonImportCsv,
   publish: runPublish,
   rollback: runRollback,
   report: runReport,
