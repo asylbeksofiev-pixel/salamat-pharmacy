@@ -225,21 +225,6 @@ export function CheckoutView() {
           <fieldset className="rounded-[var(--radius-xl)] border border-line bg-white p-5 sm:p-6">
             <legend className="sr-only">{t.checkout.comment}</legend>
             <Textarea name="comment" label={t.checkout.comment} placeholder={t.checkout.commentPlaceholder} maxLength={500} rows={3} error={errors.comment} />
-            <div className="mt-4">
-              <Checkbox
-                name="consent"
-                error={errors.consent}
-                label={
-                  <>
-                    {t.checkout.consent.split("{link}")[0]}
-                    <Link href={href("/privacy")} target="_blank" className="font-semibold text-brand-700 underline underline-offset-2">
-                      {t.checkout.consentLink}
-                    </Link>
-                    {t.checkout.consent.split("{link}")[1]}
-                  </>
-                }
-              />
-            </div>
           </fieldset>
         </div>
         <aside className="flex flex-col gap-4 self-start lg:sticky lg:top-36">
@@ -266,7 +251,24 @@ export function CheckoutView() {
               ))}
             </ul>
             <div className="mt-2 border-t border-line pt-4">{quote ? <QuoteTotals quote={quote} t={t} locale={locale} /> : <p className="text-sm text-muted">{t.cart.checking}</p>}</div>
-            <Button type="submit" size="lg" className="mt-5 w-full" loading={submitting} disabled={!quote || quote.hasBlocking || !pharmacy}>
+            {/* Consent right next to "Order": unchecked by default, required here and checked again on the server. */}
+            <div className="mt-5 rounded-[var(--radius-lg)] bg-surface p-3.5">
+              <Checkbox
+                name="consent"
+                required
+                error={errors.consent}
+                label={
+                  <>
+                    {t.checkout.consent.split("{link}")[0]}
+                    <Link href={href("/privacy")} target="_blank" className="font-semibold text-brand-700 underline underline-offset-2">
+                      {t.checkout.consentLink}
+                    </Link>
+                    {t.checkout.consent.split("{link}")[1]}
+                  </>
+                }
+              />
+            </div>
+            <Button type="submit" size="lg" wrap className="mt-4 w-full" loading={submitting} disabled={!quote || quote.hasBlocking || !pharmacy}>
               {submitting ? t.checkout.submitting : t.checkout.submit}
             </Button>
             <p className="mt-3 text-xs text-muted">{t.cart.notPaymentNote}</p>

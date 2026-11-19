@@ -77,6 +77,16 @@ describe("pickup requests", () => {
     expect(!badPhone.ok && badPhone.status === 400 && badPhone.errors.phone).toBe("phoneInvalid");
   });
 
+  it("never stores an order without explicit consent (missing, string or false)", async () => {
+    const { sal1, v200 } = await setup();
+    for (const consent of [undefined, "on", "true", 1, false]) {
+      const res = await createOrder(order({ pharmacyId: sal1.id, consent, items: [{ variantId: v200.id, quantity: 1, seenPriceKzt: 300 }] }), "client-consent");
+      expect(res.ok).toBe(false);
+      if (!res.ok && res.status === 400) expect(res.errors.consent).toBe("consentRequired");
+    }
+    expect(await prisma.order.count()).toBe(0);
+  });
+
   it("accepts unknown-price items as 'to be confirmed' lines without a total", async () => {
     const { sal1, v200 } = await setup();
     await prisma.price.deleteMany({ where: { variantId: v200.id, pharmacyId: sal1.id } });

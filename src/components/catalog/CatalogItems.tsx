@@ -266,10 +266,8 @@ export function CatalogItemsView({
           ) : null}
           <div className="min-w-0">
             <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
-              <p className="text-sm text-muted" aria-live="polite">
-                {fmt(q || activeCount ? t.items.totalFound : t.items.total, { count: result.total.toLocaleString(localeTags[locale]) })}
-                {result.pageCount > 1 && !outOfRange ? ` · ${fmt(t.items.pageOf, { page: result.page, pages: result.pageCount })}` : ""}
-              </p>
+              {/* No product counts on the site (by request): search, filters, sorting and pagination stay. */}
+              <span aria-hidden="true" />
               {filters ? (
                 <div className="flex w-full items-center gap-2 sm:w-auto">
                   <div className="lg:hidden">

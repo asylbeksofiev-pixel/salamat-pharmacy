@@ -37,8 +37,8 @@ test("3-4. search finds by part of the name and keeps dosages apart", async ({ p
   await box.press("Enter");
   await expect(page).toHaveURL(/\/search\?q=/);
   // Wait for the results to stream in before reading them.
-  await expect(page.locator("main")).toContainText("Найдено товаров: 3");
   await expect(page.locator("main article h3")).toHaveCount(3);
+  await expect(page.locator("main")).not.toContainText("Найдено товаров");
   const titles = await page.locator("main article h3").allTextContents();
   expect(titles.sort()).toEqual(["ПАРАЦЕТАМОЛ 200 мг №10 табл.", "Парацетамол 500 мг №10 табл.", "Парацетамол 500 мг №20 табл."].sort());
 });
@@ -46,11 +46,15 @@ test("3-4. search finds by part of the name and keeps dosages apart", async ({ p
 test("catalogue: totals, pagination, item by id, same article stays separate, no invented prices", async ({ page }) => {
   const total = Number((await db.$queryRaw<{ n: bigint }[]>`SELECT count(*) AS n FROM public.pharmacy_products`)[0].n);
   await page.goto("/catalog");
-  await expect(page.locator("main")).toContainText(`Товаров: ${total}`);
+  expect(total).toBeGreaterThan(48);
+  // No product counters (catalogue, sections, search): only the cards and the pagination.
+  await expect(page.locator("main")).not.toContainText(/Товаров:|Найдено товаров|Страница \d+ из/);
+  await expect(page.locator("main article")).toHaveCount(24);
   const page1 = await page.locator("main article").evaluateAll((els) => els.map((e) => e.getAttribute("data-item-id")));
   expect(page1).toHaveLength(24);
   await page.getByRole("navigation", { name: "Страницы" }).getByRole("link", { name: /Далее/ }).click();
   await expect(page).toHaveURL(/page=2/);
+  await expect(page.locator("main article")).toHaveCount(24);
   const page2 = await page.locator("main article").evaluateAll((els) => els.map((e) => e.getAttribute("data-item-id")));
   expect(page2).toHaveLength(24);
   expect(page1.filter((id) => page2.includes(id))).toEqual([]);
@@ -62,7 +66,7 @@ test("catalogue: totals, pagination, item by id, same article stays separate, no
   await expect(main.getByRole("button", { name: "В корзину" })).toHaveCount(24);
   // Same article → two separate cards, each opening its own id.
   await page.goto("/catalog?q=DUP-001");
-  await expect(main).toContainText("Найдено товаров: 2");
+  await expect(main.locator("article")).toHaveCount(2);
   const ids = await main.locator("article").evaluateAll((els) => els.map((e) => e.getAttribute("data-item-id")));
   expect(new Set(ids).size).toBe(2);
   await main.getByRole("link", { name: "Бинт стерильный 7 м × 14 см" }).click();
@@ -80,7 +84,7 @@ test("catalogue: totals, pagination, item by id, same article stays separate, no
 test("favourites: the heart on a catalogue card saves the product and the favourites page shows it", async ({ page }) => {
   await page.goto("/catalog?q=DUP-001");
   const main = page.locator("main");
-  await expect(main).toContainText("Найдено товаров: 2");
+  await expect(main.locator("article")).toHaveCount(2);
   const card = main.locator("article").first();
   const id = await card.getAttribute("data-item-id");
   const name = (await card.locator("h3").textContent())?.trim() ?? "";
@@ -122,6 +126,39 @@ test("branches: closed ones are gone, new ones are listed and mapped, nearest ph
   await expect(nearestBox).toContainText("8 (702) 531 44 85");
   await expect(page.locator(".sal-me-label")).toHaveText("Вы здесь");
   await expect(page.locator(".leaflet-popup-content")).toContainText("Построить маршрут");
+});
+
+test("nearest by address: validation, server errors and the list sorted by distance", async ({ page, request }) => {
+  // The API rejects too short addresses and foreign origins without calling the geocoder.
+  const short = await request.post("/api/pharmacy/nearest", { data: { address: "ab", locale: "ru" } });
+  expect(short.status()).toBe(400);
+  const foreign = await request.post("/api/pharmacy/nearest", { data: { address: "Кенесары 40", locale: "ru" }, headers: { Origin: "https://evil.example" } });
+  expect(foreign.status()).toBe(403);
+
+  await page.goto("/pharmacies");
+  const box = page.locator("section[aria-labelledby=address-nearest-title]");
+  const input = box.getByLabel("Ваш адрес");
+  await input.fill("ab");
+  await box.getByRole("button", { name: "Найти" }).click();
+  await expect(box).toContainText("Введите улицу и номер дома");
+
+  // The geocoder itself is external: here the server answer is stubbed, the page must render it as is.
+  const rows = await db.pharmacy.findMany({ where: { isActive: true, latitude: { not: null } }, select: { id: true, addressRu: true }, orderBy: { code: "asc" }, take: 2 });
+  await page.route("**/api/pharmacy/nearest", (route) =>
+    route.fulfill({ json: { point: { lat: 51.1, lng: 71.4 }, label: "Астана, тестовый адрес", provider: "nominatim", results: [{ id: rows[1].id, km: 0.4 }, { id: rows[0].id, km: 2.6 }] } }),
+  );
+  await input.fill("Кенесары 40");
+  await box.getByRole("button", { name: "Найти" }).click();
+  const items = box.locator("ol > li");
+  await expect(items).toHaveCount(2);
+  await expect(items.first()).toContainText(rows[1].addressRu);
+  await expect(items.first()).toContainText("400 м");
+  await expect(items.nth(1)).toContainText("2,6 км");
+
+  await page.route("**/api/pharmacy/nearest", (route) => route.fulfill({ status: 503, json: { error: "unavailable" } }));
+  await box.getByRole("button", { name: "Найти" }).click();
+  await expect(box.locator("ol")).toHaveCount(0);
+  await expect(box.getByText(/недоступен|временно/i)).toBeVisible();
 });
 
 test("catalogue API never exposes database credentials", async ({ request }) => {
@@ -204,11 +241,11 @@ test("11-13. checkout re-checks prices, saves one request, operator sees it", as
   await page.getByLabel("Имя").fill(name);
   await page.getByLabel("Телефон").fill("87011234567");
   await page.locator("input[name=consent]").check();
-  const submit = page.getByRole("button", { name: "Отправить заявку" });
+  const submit = page.getByRole("button", { name: "Заказать" });
   await submit.dblclick();
   await page.waitForURL(/\/order\/success\/S-/);
-  await expect(page.locator("main")).toContainText("Заявка отправлена");
-  await expect(page.locator("main")).toContainText("оператор");
+  await expect(page.locator("main")).toContainText("Заказ отправлен в аптеку");
+  await expect(page.locator("main")).toContainText("Сотрудник аптеки");
   const publicId = page.url().split("/").pop()!;
   expect(await db.order.count({ where: { customerName: name } })).toBe(1);
   const saved = await db.order.findUniqueOrThrow({ where: { publicId }, include: { items: true } });
@@ -305,7 +342,7 @@ test("request 'to be confirmed': catalogue product → cart → checkout → sav
   await card.getByRole("button", { name: "В корзину" }).click();
   await expect(card.getByRole("link", { name: "В корзине" })).toBeVisible();
   await page.goto("/cart");
-  await expect(page.locator("main")).toContainText("Заявка на уточнение");
+  await expect(page.locator("main")).toContainText("Цену и наличие подтвердит аптека");
   await expect(page.locator("main")).toContainText("Артикул: ASP-100");
   await expect(page.locator("main")).toContainText("Цену уточнит аптека");
   await expect(page.locator("main")).not.toContainText(/\d\s₸/);
@@ -313,8 +350,15 @@ test("request 'to be confirmed': catalogue product → cart → checkout → sav
   const name = `E2E catalog ${Date.now()}`;
   await page.getByLabel("Имя").fill(name);
   await page.getByLabel("Телефон").fill("87011234567");
-  await page.locator("input[name=consent]").check();
-  await page.getByRole("button", { name: "Отправить заявку" }).click();
+  // Consent sits next to "Order", starts unchecked and is required; the privacy link works.
+  const consent = page.locator("input[name=consent]");
+  await expect(consent).not.toBeChecked();
+  await expect(page.getByRole("link", { name: "политикой конфиденциальности" })).toHaveAttribute("href", "/privacy");
+  await page.getByRole("button", { name: "Заказать" }).click();
+  await expect(page.getByText("Нужно согласие на обработку данных").first()).toBeVisible();
+  await expect(page).toHaveURL(/\/checkout$/);
+  await consent.check();
+  await page.getByRole("button", { name: "Заказать" }).click();
   await page.waitForURL(/\/order\/success\/S-/);
   expect(page.url()).not.toContain("87011234567");
   const publicId = page.url().split("/").pop()!;
@@ -338,7 +382,8 @@ test("English version: /en routes, switcher keeps the page and query, no Russian
   await expect(page).toHaveURL(/\/en\/catalog\?q=DUP-001$/);
   await expect(page.locator("html")).toHaveAttribute("lang", "en");
   const main = page.locator("main");
-  await expect(main).toContainText("Products found: 2");
+  await expect(main.locator("article")).toHaveCount(2);
+  await expect(main).not.toContainText("Products found");
   await expect(main.locator("article").first()).toContainText("Price to be confirmed");
   await expect(main.getByRole("button", { name: "Add to cart" })).toHaveCount(2);
   await expect(page.locator("header")).toContainText("Pharmacies");

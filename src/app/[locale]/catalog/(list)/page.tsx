@@ -45,7 +45,7 @@ export default async function CatalogPage({ params, searchParams }: PageProps<"/
             <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {roots.map((c) => (
                 <li key={c.slug}>
-                  <CategoryTile slug={c.slug} name={c.name} iconKey={c.iconKey} locale={locale} count={store.catalogCategoryCounts.get(c.id)} />
+                  <CategoryTile slug={c.slug} name={c.name} iconKey={c.iconKey} locale={locale} />
                 </li>
               ))}
             </ul>

@@ -30,6 +30,15 @@ export const env = {
     .map((s) => s.trim())
     .filter(Boolean),
   cookieSecure: process.env.COOKIE_SECURE ? bool(process.env.COOKIE_SECURE) : isProd,
+  /**
+   * Address search for "nearest pharmacy" (server only, never sent to the browser).
+   * With TWOGIS_API_KEY the 2GIS geocoder is used; otherwise the public OpenStreetMap Nominatim service
+   * (no key, light use only: 1 request per second, cached). GEOCODER=off disables the search.
+   */
+  geocoder: {
+    mode: (process.env.GEOCODER || "").toLowerCase(),
+    twoGisKey: process.env.TWOGIS_API_KEY || "",
+  },
 };
 
 export function assertSecretConfigured() {

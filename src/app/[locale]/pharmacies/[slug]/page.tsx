@@ -11,6 +11,7 @@ import { Breadcrumbs } from "@/components/ui/Breadcrumbs";
 import { Badge, Notice } from "@/components/ui/Feedback";
 import { SelectPharmacyButton } from "@/components/catalog/SelectPharmacyButton";
 import { Icon } from "@/components/icons";
+import { PharmacyGallery } from "@/components/pharmacy/PharmacyGallery";
 import { PharmacyMap } from "@/components/pharmacy/PharmacyMap";
 
 export async function generateMetadata({ params }: PageProps<"/[locale]/pharmacies/[slug]">) {
@@ -48,6 +49,8 @@ export default async function PharmacyPage({ params }: PageProps<"/[locale]/phar
       />
       <div className="mt-6 grid gap-8 lg:grid-cols-[1fr_1fr]">
         <div className="flex flex-col gap-5">
+          {/* Photos only when SALAMAT has confirmed the right to publish them; otherwise no photo block at all. */}
+          {p.photos.length ? <PharmacyGallery photos={p.photos} address={p.address} aspect="aspect-[4/3] sm:aspect-[16/10]" className="overflow-hidden rounded-[var(--radius-2xl)] border border-line [&>figcaption]:px-3 [&>figcaption]:pb-2" /> : null}
           <div>
             <p className="text-sm font-semibold text-brand-700">{t.meta.siteName} · {p.city}</p>
             <h1 className="mt-1 text-[1.75rem] leading-tight font-bold tracking-tight sm:text-[2.1rem]">{p.address}</h1>

@@ -5,9 +5,9 @@ import { prisma } from "@/server/db";
 import { formatDateTime } from "@/lib/format";
 import { WEEKDAYS, parseOpeningHours } from "@/lib/hours";
 import { AdminForm } from "@/components/admin/AdminForm";
-import { Card, CheckField, Field, PageHeader, TextArea } from "@/components/admin/ui";
+import { Card, CheckField, Field, PageHeader, SelectField, TextArea } from "@/components/admin/ui";
 import { Notice } from "@/components/ui/Feedback";
-import { savePharmacy } from "../actions";
+import { addPharmacyPhoto, deletePharmacyPhoto, savePharmacy } from "../actions";
 
 export const metadata = { title: "Филиал" };
 const DAYS_RU = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
@@ -15,7 +15,7 @@ const DAYS_RU = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
 export default async function PharmacyAdminPage({ params }: PageProps<"/admin/pharmacies/[id]">) {
   const user = await requireStaffPage("pharmacies.read");
   const { id } = await params;
-  const p = await prisma.pharmacy.findUnique({ where: { id }, include: { source: true } });
+  const p = await prisma.pharmacy.findUnique({ where: { id }, include: { source: true, photos: { orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }] } } });
   if (!p) notFound();
   const write = canAccessPharmacy(user, "pharmacies.write", p.id);
   const hours = parseOpeningHours(p.openingHours);
@@ -52,6 +52,45 @@ export default async function PharmacyAdminPage({ params }: PageProps<"/admin/ph
       {p.sourceAddress && p.sourceAddress !== p.addressRu ? <Notice tone="info">Адрес в источнике: «{p.sourceAddress}»</Notice> : null}
       <Card>
         {write ? <AdminForm action={savePharmacy.bind(null, p.id)}>{fields}</AdminForm> : <fieldset disabled className="flex flex-col gap-4 opacity-80">{fields}<p className="text-sm text-muted">Изменять может менеджер этого филиала или Super Admin.</p></fieldset>}
+      </Card>
+      <Card title="Фотографии филиала">
+        <p className="mb-4 text-sm text-muted">
+          Показываются на сайте в карточке филиала и на его странице. Добавляйте только фото этого адреса, на которые у SALAMAT есть право:
+          собственные снимки сети или фото, использование которых письменно разрешено автором. Фото с карт (2ГИС, Яндекс, Google) и из
+          интернета без разрешения не публикуются.
+        </p>
+        {p.photos.length ? (
+          <ul className="mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {p.photos.map((ph) => (
+              <li key={ph.id} className="overflow-hidden rounded-[var(--radius-md)] border border-line">
+                {/* eslint-disable-next-line @next/next/no-img-element -- preview of a staff-provided https photo */}
+                <img src={ph.url} alt="" className="aspect-[16/10] w-full bg-surface object-cover" referrerPolicy="no-referrer" />
+                <div className="flex flex-col gap-1 p-3 text-sm">
+                  <span className="font-semibold">{ph.kind === "INTERIOR" ? "Торговый зал" : "Вид снаружи"}</span>
+                  <span className="text-muted">{ph.source} · {ph.license}</span>
+                  <span className="text-xs text-muted">Право подтверждено {formatDateTime(ph.rightsConfirmedAt)}</span>
+                  {write ? (
+                    <AdminForm action={deletePharmacyPhoto.bind(null, ph.id)} submitLabel="Удалить фото" submitVariant="outline" confirm="Удалить это фото с сайта?" inline />
+                  ) : null}
+                </div>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="mb-5 rounded-[var(--radius-md)] bg-surface p-3 text-sm text-muted">Подтверждённых фото пока нет — на сайте филиал показывается без фото.</p>
+        )}
+        {write ? (
+          <AdminForm action={addPharmacyPhoto.bind(null, p.id)} submitLabel="Добавить фото" resetOnSuccess>
+            <div className="grid gap-4 md:grid-cols-2">
+              <Field label="Ссылка на фото (https://…)" name="url" required placeholder="https://…" />
+              <SelectField label="Что на фото" name="kind" options={[{ value: "EXTERIOR", label: "Вид снаружи (вход, вывеска)" }, { value: "INTERIOR", label: "Торговый зал" }]} />
+              <Field label="Кто предоставил фото" name="source" required placeholder="SALAMAT / имя фотографа" />
+              <Field label="Условия использования" name="license" required placeholder="Собственность SALAMAT / разрешение автора от 20.11.2026" />
+              <Field label="Ссылка на источник или разрешение (необязательно)" name="sourceUrl" placeholder="https://…" className="md:col-span-2" />
+            </div>
+            <CheckField label="Подтверждаю: на фото именно этот филиал, и у SALAMAT есть право публиковать его на сайте" name="rightsConfirmed" />
+          </AdminForm>
+        ) : null}
       </Card>
     </div>
   );

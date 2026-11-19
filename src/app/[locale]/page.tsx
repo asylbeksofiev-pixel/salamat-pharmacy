@@ -131,12 +131,6 @@ export default async function HomePage({ params }: PageProps<"/[locale]">) {
       <section aria-labelledby="h-cat" className="container-page py-12 md:py-16">
         <div data-home-reveal className="mb-6 flex flex-col gap-5 md:mb-8 md:flex-row md:items-end md:justify-between md:gap-10">
           <div className="min-w-0">
-            {store.catalogTotal ? (
-              <p className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-brand-50 px-3 py-1 text-sm font-semibold text-brand-800">
-                <Icon name="box" size={16} />
-                {fmt(t.home.catalogCount, { count: store.catalogTotal.toLocaleString(numberLocale) })}
-              </p>
-            ) : null}
             <h2 id="h-cat" className="text-[1.6rem] leading-tight font-bold tracking-tight text-ink sm:text-[2rem]">
               {t.home.catalogTitle}
             </h2>
@@ -196,7 +190,7 @@ export default async function HomePage({ params }: PageProps<"/[locale]">) {
           <ul className="sal-home-grid grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {roots.map((c) => (
               <li key={c.slug} data-home-reveal>
-                <CategoryTile slug={c.slug} name={c.name} iconKey={c.iconKey} locale={locale} count={store.catalogCategoryCounts.get(c.id)} />
+                <CategoryTile slug={c.slug} name={c.name} iconKey={c.iconKey} locale={locale} />
               </li>
             ))}
           </ul>
