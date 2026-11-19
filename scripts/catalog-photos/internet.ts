@@ -549,7 +549,7 @@ async function dedupeImages() {
 
 const REVIEW_COLUMNS = [
   "product_id", "article", "name", "match_status", "confidence", "match_method", "source_name", "source_page_url", "source_image_url",
-  "stored_image_url", "rights_status", "review_status", "reason", "error", "checked_at",
+  "stored_image_url", "rights_status", "review_status", "reason", "error", "checked_at", "sha256",
 ] as const;
 
 function reviewRow(r: PhotoResult) {
@@ -569,6 +569,7 @@ function reviewRow(r: PhotoResult) {
     reason: r.reason,
     error: r.error,
     checked_at: r.validated_at ?? r.checked_at,
+    sha256: r.sha256,
   };
 }
 
@@ -620,17 +621,26 @@ async function runApplyReview() {
   const csv = (await readFile(file, "utf8")).replace(/^\uFEFF/, "");
   const results = await readResults();
   const changed: PhotoResult[] = [];
+  let stale = 0;
   for (const row of Papa.parse<Record<string, string>>(csv, { header: true, skipEmptyLines: true }).data) {
     const r = results.get((row.product_id ?? "").trim());
     const d = (row.decision ?? "").trim().toLowerCase();
     if (!r || !/^(approve|approved|reject|rejected)$/.test(d)) continue;
     const status: ReviewStatus = d.startsWith("approve") ? "approved" : "rejected";
+    // A decision is about one picture: if the source photo changed since the review (another run, another day),
+    // an approval no longer applies and the row stays waiting for a person.
+    const reviewedSha = (row.sha256 ?? "").trim();
+    if (status === "approved" && (!reviewedSha || reviewedSha !== r.sha256)) {
+      stale++;
+      continue;
+    }
     const note = (row.note ?? "").trim();
     changed.push({ ...r, review_status: status, reason: [r.reason, `review_${status}${note ? `:${note}` : ""}`].filter(Boolean).join("; ") });
   }
   await writeResults(changed);
   await journal({ event: "apply_review", file, approved: changed.filter((r) => r.review_status === "approved").length, rejected: changed.filter((r) => r.review_status === "rejected").length });
   console.log(`Решения применены: ${changed.length} (одобрено ${changed.filter((r) => r.review_status === "approved").length}, отклонено ${changed.filter((r) => r.review_status === "rejected").length})`);
+  if (stale) console.log(`Не применено одобрений: ${stale} — файл изменился после проверки или в CSV нет sha256; эти фото снова ждут проверки`);
 }
 
 // ---------------------------------------------------------------- publish

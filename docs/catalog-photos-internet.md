@@ -88,8 +88,9 @@ CAPTCHA, авторизация, robots.txt и ограничения часто
 одобренные человеком** (`review_status = approved`); `--allow-unreviewed` разрешает публикацию confirmed без
 просмотра, probable и doubtful при этом всё равно не публикуются.
 
-Решения записываются в CSV `product_id,decision,note` (`decision` = `approve` | `reject`) и применяются командой
-`photos:apply-review`. Решения человека автоматические прогоны не перезаписывают ни в `results.jsonl`, ни в
+Решения записываются в CSV `product_id,decision,note,sha256` (`decision` = `approve` | `reject`) и применяются
+командой `photos:apply-review`. Одобрение относится к конкретному файлу: «approve» применяется, только если
+`sha256` в CSV совпадает с файлом текущего прогона (если фото в источнике заменили, товар снова ждёт проверки). Решения человека автоматические прогоны не перезаписывают ни в `results.jsonl`, ни в
 `catalog_photo_results`.
 
 ## Команды
@@ -100,7 +101,8 @@ npm run photos:fetch-sources                # выгрузки Open Facts (ра�
 npm run photos:discover -- --limit 50       # пробный прогон; без --limit — все товары без фото
 npm run photos:validate -- --concurrency 3  # скачать и проверить файлы confirmed/probable
 npm run photos:review-export                # CSV для людей
-npm run photos:apply-review -- data/catalog-photos-internet/qa-decisions.csv
+npm run photos:apply-review -- data/catalog-photos-internet/qa-decisions.csv               # 85 confirmed
+npm run photos:apply-review -- data/catalog-photos-internet/review-probable-2026-11-19.csv  # 664 probable
 npm run photos:publish -- --dry-run         # план без изменений (publish-plan-<run_id>.csv)
 npm run photos:publish -- --confirm --limit 10 --run-id photos-test-10
 npm run photos:rollback -- --run-id photos-test-10 --dry-run
@@ -148,9 +150,19 @@ npm run photos:report
 3. Задеплоить ветку: сборка выполнит `prisma migrate deploy` и создаст `catalog_photo_results` и
    `catalog_photo_changes`. `next.config.ts` уже разрешает `https://*.public.blob.vercel-storage.com/products/**`
    для next/image; CSP разрешает `img-src https:`.
-4. Опубликовать:
+4. Собрать файлы заново (рабочая папка `.photo-work` в Git не хранится) и применить решения проверки:
    ```bash
    set -a; . ./.env.local; set +a
+   npm ci
+   npm run photos:snapshot
+   npm run photos:fetch-sources
+   npm run photos:discover
+   npm run photos:validate
+   npm run photos:apply-review -- data/catalog-photos-internet/qa-decisions.csv
+   npm run photos:apply-review -- data/catalog-photos-internet/review-probable-2026-11-19.csv
+   ```
+5. Опубликовать:
+   ```bash
    npm run photos:publish -- --dry-run
    npm run photos:publish -- --confirm --limit 10 --run-id photos-2026-11-19-test10
    ```

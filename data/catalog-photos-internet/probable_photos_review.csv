@@ -1,1 +1,1 @@
-﻿product_id,article,name,match_status,confidence,match_method,source_name,source_page_url,source_image_url,stored_image_url,rights_status,review_status,reason,error,checked_at,decision
+﻿product_id,article,name,match_status,confidence,match_method,source_name,source_page_url,source_image_url,stored_image_url,rights_status,review_status,reason,error,checked_at,sha256,decision
