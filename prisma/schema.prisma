@@ -688,6 +688,15 @@ model CatalogPhotoResult {
   publishedAt    DateTime? @map("published_at")
   createdAt      DateTime  @default(now()) @map("created_at")
   updatedAt      DateTime  @default(now()) @map("updated_at")
+  /// How the published photo is served: "vercel_blob" (a copy in SALAMAT's Blob store, URL in stored_image_url) or
+  /// "external_url" (the source's own public URL, nothing copied; stored_image_url stays empty).
+  storage           String?
+  /// Exactly the value written into pharmacy_products.image_url; the site shows the credit only while they match.
+  publishedImageUrl String?   @map("published_image_url")
+  /// SHA-256, size and check time of the source file as served at publication (sha256 is the reviewed file).
+  sourceSha256      String?   @map("source_sha256")
+  sourceBytes       Int?      @map("source_bytes")
+  sourceCheckedAt   DateTime? @map("source_checked_at")
 
   @@index([matchStatus, reviewStatus])
   @@index([runId])

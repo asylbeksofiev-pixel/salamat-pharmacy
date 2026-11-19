@@ -146,6 +146,7 @@ describe("catalogue from public.pharmacy_products", () => {
           sourceImageUrl: "https://images.openbeautyfacts.org/images/products/asp/front_ru.3.full.jpg", storedImageUrl: blobUrl,
           sourceLicense: "CC BY-SA 3.0", rightsStatus: "licensed_cc_by_sa", attribution: "Open Beauty Facts contributors",
           sha256: "a".repeat(64), reviewStatus: "published", checkedAt: new Date(), publishedAt: new Date(),
+          storage: "vercel_blob", publishedImageUrl: blobUrl,
         },
       });
       const again = await getCatalogItem(item.id);
@@ -162,6 +163,27 @@ describe("catalogue from public.pharmacy_products", () => {
       // The database refuses a "published" row without a stored file or with a licence that does not allow reuse.
       await expect(
         prisma.catalogPhotoResult.update({ where: { productId: BigInt(item.id) }, data: { reviewStatus: "published", rightsStatus: "permission_required" } }),
+      ).rejects.toThrow();
+
+      // Direct link to the source (storage = external_url): the credit follows the URL in image_url.
+      const sourceUrl = "https://images.openbeautyfacts.org/images/products/asp/front_ru.3.full.jpg";
+      await prisma.$executeRaw`UPDATE public.pharmacy_products SET image_url = ${sourceUrl} WHERE id = ${BigInt(item.id)}`;
+      await prisma.catalogPhotoResult.update({
+        where: { productId: BigInt(item.id) },
+        data: { reviewStatus: "published", storage: "external_url", storedImageUrl: null, publishedImageUrl: sourceUrl },
+      });
+      const linked = await getCatalogItem(item.id);
+      expect(linked?.imageUrl).toBe(sourceUrl);
+      expect(linked?.imageCredit).toEqual({ source: "Open Beauty Facts contributors", url: "https://world.openbeautyfacts.org/product/ASP-100", license: "CC BY-SA 3.0" });
+      // A source URL is never presented as a Blob copy, and an external row must point at its own source.
+      await expect(
+        prisma.catalogPhotoResult.update({ where: { productId: BigInt(item.id) }, data: { storedImageUrl: sourceUrl } }),
+      ).rejects.toThrow();
+      await expect(
+        prisma.catalogPhotoResult.update({ where: { productId: BigInt(item.id) }, data: { publishedImageUrl: "https://cdn.example.org/other.jpg" } }),
+      ).rejects.toThrow();
+      await expect(
+        prisma.catalogPhotoResult.update({ where: { productId: BigInt(item.id) }, data: { storage: null } }),
       ).rejects.toThrow();
     } finally {
       await prisma.catalogPhotoResult.deleteMany({ where: { productId: BigInt(item.id) } });

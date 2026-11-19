@@ -3,7 +3,9 @@ import "server-only";
 // optional price / stock_quantity / image_url). Read-only: the site never writes to this table.
 // Sections come from catalog_item_categories (one row per product id, see scripts/classify-catalog.ts);
 // photos found by barcode come from catalog_images. A photo published into image_url from an open database
-// (scripts/catalog-photos/internet.ts) keeps its source and licence in catalog_photo_results, shown as the credit.
+// (scripts/catalog-photos/internet.ts or the psql import in data/catalog-photos-internet/neon-import) keeps its
+// source and licence in catalog_photo_results; the credit is shown only while image_url is exactly that photo
+// (published_image_url — a Blob copy or the source's own URL).
 //
 // Filtering, sorting, counting and pagination run in SQL over the whole catalogue. Every value from the URL is a
 // bound parameter (Prisma tagged templates); identifiers and ORDER BY clauses come only from fixed lists below.
@@ -80,7 +82,7 @@ const JOINS = Prisma.raw(
 const BASE_COLUMNS = Prisma.raw(
   `p."id"::text AS "id", p."article", p."name",
    ci."photo_url" AS "photoUrl", ci."photo_source" AS "photoSource", ci."photo_source_url" AS "photoSourceUrl", ci."photo_license" AS "photoLicense",
-   cpr."stored_image_url" AS "storedUrl", coalesce(cpr."attribution", cpr."source_name") AS "storedSource",
+   coalesce(cpr."published_image_url", cpr."stored_image_url") AS "storedUrl", coalesce(cpr."attribution", cpr."source_name") AS "storedSource",
    cpr."source_page_url" AS "storedSourceUrl", cpr."source_license" AS "storedLicense",
    k."slug" AS "categorySlug", k."nameRu" AS "categoryNameRu", k."nameKk" AS "categoryNameKk"`,
 );
