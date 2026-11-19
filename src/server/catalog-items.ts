@@ -2,7 +2,8 @@ import "server-only";
 // Catalogue of SALAMAT products loaded into public.pharmacy_products (id BIGINT PK, article TEXT, name TEXT,
 // optional price / stock_quantity / image_url). Read-only: the site never writes to this table.
 // Sections come from catalog_item_categories (one row per product id, see scripts/classify-catalog.ts);
-// photos found by barcode come from catalog_images.
+// photos found by barcode come from catalog_images. A photo published into image_url from an open database
+// (scripts/catalog-photos/internet.ts) keeps its source and licence in catalog_photo_results, shown as the credit.
 //
 // Filtering, sorting, counting and pagination run in SQL over the whole catalogue. Every value from the URL is a
 // bound parameter (Prisma tagged templates); identifiers and ORDER BY clauses come only from fixed lists below.
@@ -69,15 +70,18 @@ export interface CatalogPage {
 // ---------- tables, optional columns ----------
 
 const P = Prisma.raw(`"public"."pharmacy_products" p`);
-/** Photos by barcode + the published section of each product. */
+/** Photos by barcode, the source of a published photo and the published section of each product. */
 const JOINS = Prisma.raw(
   `LEFT JOIN "public"."catalog_images" ci ON ci."barcode" = btrim(p."article")
+   LEFT JOIN "public"."catalog_photo_results" cpr ON cpr."product_id" = p."id" AND cpr."review_status" = 'published'
    LEFT JOIN "public"."catalog_item_categories" cic ON cic."product_id" = p."id" AND cic."review_status" IN ('auto', 'confirmed')
    LEFT JOIN "public"."Category" k ON k."id" = cic."category_id"`,
 );
 const BASE_COLUMNS = Prisma.raw(
   `p."id"::text AS "id", p."article", p."name",
    ci."photo_url" AS "photoUrl", ci."photo_source" AS "photoSource", ci."photo_source_url" AS "photoSourceUrl", ci."photo_license" AS "photoLicense",
+   cpr."stored_image_url" AS "storedUrl", coalesce(cpr."attribution", cpr."source_name") AS "storedSource",
+   cpr."source_page_url" AS "storedSourceUrl", cpr."source_license" AS "storedLicense",
    k."slug" AS "categorySlug", k."nameRu" AS "categoryNameRu", k."nameKk" AS "categoryNameKk"`,
 );
 
@@ -123,6 +127,10 @@ interface Row {
   photoSource?: string | null;
   photoSourceUrl?: string | null;
   photoLicense?: string | null;
+  storedUrl?: string | null;
+  storedSource?: string | null;
+  storedSourceUrl?: string | null;
+  storedLicense?: string | null;
   categorySlug?: string | null;
   categoryNameRu?: string | null;
   categoryNameKk?: string | null;
@@ -136,6 +144,11 @@ function toItem(r: Row, locale: Locale): CatalogItem {
   // SALAMAT's own photo (image_url) wins over a photo found by barcode.
   const own = isHttps(r.imageUrl) ? r.imageUrl : null;
   const found = !own && isHttps(r.photoUrl) && r.photoSource && isHttps(r.photoSourceUrl) && r.photoLicense ? r.photoUrl : null;
+  // image_url filled from an open database: its licence requires the same credit as a photo found by barcode.
+  const ownCredit =
+    own && r.storedUrl === own && r.storedSource && isHttps(r.storedSourceUrl) && r.storedLicense
+      ? { source: r.storedSource, url: r.storedSourceUrl, license: r.storedLicense }
+      : null;
   return {
     id: r.id,
     article: r.article?.trim() || null,
@@ -145,7 +158,7 @@ function toItem(r: Row, locale: Locale): CatalogItem {
     category: r.categorySlug && r.categoryNameRu ? categoryName(locale, r.categorySlug, r.categoryNameRu, r.categoryNameKk) : null,
     categorySlug: r.categorySlug ?? null,
     imageUrl: own ?? found,
-    imageCredit: found ? { source: r.photoSource!, url: r.photoSourceUrl!, license: r.photoLicense! } : null,
+    imageCredit: found ? { source: r.photoSource!, url: r.photoSourceUrl!, license: r.photoLicense! } : ownCredit,
   };
 }
 

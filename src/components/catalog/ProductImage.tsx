@@ -1,6 +1,7 @@
 import Image from "next/image";
 import { cn } from "../ui/cn";
 import { ProductPhoto } from "./ProductPhoto";
+import { isBlobProductPhoto } from "@/lib/catalog-photos/blob-url";
 
 const optimisedHosts = new Set((process.env.IMAGE_HOSTS ?? "").split(",").map((h) => h.trim()).filter(Boolean));
 
@@ -37,7 +38,7 @@ export function ProductImage({ src, alt, noImageLabel, className, sizes = "(max-
   const fallback = <ProductPlaceholder alt={alt} label={noImageLabel} compact={compact} aspect="" radius="" className="absolute inset-0 h-full" />;
   return (
     <div className={cn("relative w-full overflow-hidden bg-white", aspect, radius, className)}>
-      <ProductPhoto src={src} alt={alt} optimised={!!host && optimisedHosts.has(host)} sizes={sizes} priority={priority} className={imgClass} fallback={fallback} />
+      <ProductPhoto src={src} alt={alt} optimised={(!!host && optimisedHosts.has(host)) || isBlobProductPhoto(src)} sizes={sizes} priority={priority} className={imgClass} fallback={fallback} />
     </div>
   );
 }

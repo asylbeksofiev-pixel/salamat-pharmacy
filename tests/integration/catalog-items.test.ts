@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { prisma } from "@/server/db";
-import { catalogTokens, getCatalogItem, isCatalogId, listCatalogItems, listCatalogItemsByIds, listCatalogPreview, suggestCatalogItems } from "@/server/catalog-items";
+import { catalogTokens, getCatalogItem, isCatalogId, listCatalogItems, listCatalogItemsByIds, listCatalogPreview, resetCatalogColumnsCache, suggestCatalogItems } from "@/server/catalog-items";
 
 async function tableCount() {
   const r = await prisma.$queryRaw<{ n: bigint }[]>`SELECT count(*) AS n FROM public.pharmacy_products`;
@@ -127,6 +127,46 @@ describe("catalogue from public.pharmacy_products", () => {
       expect((await getCatalogItem(item.id))?.imageUrl).toBeNull();
     } finally {
       await prisma.catalogImage.delete({ where: { barcode: "ASP-100" } });
+    }
+  });
+
+  it("shows a photo published into image_url with the credit of its open-licence source", async () => {
+    const [item] = (await listCatalogItems({ q: "ASP-100", pageSize: 1 })).items;
+    const blobUrl = `https://store1.public.blob.vercel-storage.com/products/${item.id}/${"a".repeat(64)}.webp`;
+    await prisma.$executeRawUnsafe(`ALTER TABLE public.pharmacy_products ADD COLUMN IF NOT EXISTS image_url text`);
+    resetCatalogColumnsCache();
+    try {
+      await prisma.$executeRaw`UPDATE public.pharmacy_products SET image_url = ${blobUrl} WHERE id = ${BigInt(item.id)}`;
+      // Without an audit row the photo is SALAMAT's own: no credit.
+      expect((await getCatalogItem(item.id))?.imageCredit).toBeNull();
+      await prisma.catalogPhotoResult.create({
+        data: {
+          productId: BigInt(item.id), article: item.article, productName: item.name, matchStatus: "confirmed", matchMethod: "gtin_exact",
+          confidence: 0.9, sourceName: "Open Beauty Facts", sourcePageUrl: "https://world.openbeautyfacts.org/product/ASP-100",
+          sourceImageUrl: "https://images.openbeautyfacts.org/images/products/asp/front_ru.3.full.jpg", storedImageUrl: blobUrl,
+          sourceLicense: "CC BY-SA 3.0", rightsStatus: "licensed_cc_by_sa", attribution: "Open Beauty Facts contributors",
+          sha256: "a".repeat(64), reviewStatus: "published", checkedAt: new Date(), publishedAt: new Date(),
+        },
+      });
+      const again = await getCatalogItem(item.id);
+      expect(again?.imageUrl).toBe(blobUrl);
+      expect(again?.imageCredit).toEqual({ source: "Open Beauty Facts contributors", url: "https://world.openbeautyfacts.org/product/ASP-100", license: "CC BY-SA 3.0" });
+      expect((await listCatalogItems({ q: "ASP-100", pageSize: 1, hasPhoto: true })).total).toBe(1);
+      // The owner replaced the photo: the old credit must not be shown under someone else's photo.
+      await prisma.$executeRaw`UPDATE public.pharmacy_products SET image_url = 'https://cdn.example.org/own.jpg' WHERE id = ${BigInt(item.id)}`;
+      expect((await getCatalogItem(item.id))?.imageCredit).toBeNull();
+      // A row that is not published (e.g. rolled back) gives no credit either.
+      await prisma.$executeRaw`UPDATE public.pharmacy_products SET image_url = ${blobUrl} WHERE id = ${BigInt(item.id)}`;
+      await prisma.catalogPhotoResult.update({ where: { productId: BigInt(item.id) }, data: { reviewStatus: "rolled_back" } });
+      expect((await getCatalogItem(item.id))?.imageCredit).toBeNull();
+      // The database refuses a "published" row without a stored file or with a licence that does not allow reuse.
+      await expect(
+        prisma.catalogPhotoResult.update({ where: { productId: BigInt(item.id) }, data: { reviewStatus: "published", rightsStatus: "permission_required" } }),
+      ).rejects.toThrow();
+    } finally {
+      await prisma.catalogPhotoResult.deleteMany({ where: { productId: BigInt(item.id) } });
+      await prisma.$executeRawUnsafe(`ALTER TABLE public.pharmacy_products DROP COLUMN IF EXISTS image_url`);
+      resetCatalogColumnsCache();
     }
   });
 
