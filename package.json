@@ -21,7 +21,16 @@
     "templates:build": "tsx scripts/make-templates.ts",
     "postinstall": "prisma generate",
     "db:catalog-fixture": "node scripts/catalog-fixture.mjs",
-    "catalog:classify": "tsx scripts/classify-catalog.ts"
+    "catalog:classify": "tsx scripts/classify-catalog.ts",
+    "photos:snapshot": "tsx scripts/catalog-photos/internet.ts snapshot",
+    "photos:fetch-sources": "tsx scripts/catalog-photos/internet.ts fetch-sources",
+    "photos:discover": "tsx scripts/catalog-photos/internet.ts discover",
+    "photos:validate": "tsx scripts/catalog-photos/internet.ts validate",
+    "photos:review-export": "tsx scripts/catalog-photos/internet.ts review-export",
+    "photos:publish": "tsx scripts/catalog-photos/internet.ts publish",
+    "photos:rollback": "tsx scripts/catalog-photos/internet.ts rollback",
+    "photos:report": "tsx scripts/catalog-photos/internet.ts report",
+    "photos:apply-review": "tsx scripts/catalog-photos/internet.ts apply-review"
   },
   "dependencies": {
     "@fontsource-variable/onest": "^5.3.1",
@@ -48,12 +57,15 @@
     "@types/papaparse": "^5.5.2",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@vercel/blob": "^2.9.0",
     "eslint": "^9",
     "eslint-config-next": "16.4.6",
+    "sharp": "^0.35.5",
     "tailwindcss": "4.3.3",
     "tsx": "^4.23.15",
     "typescript": "^5",
-    "vitest": "^3.2.7"
+    "vitest": "^3.2.7",
+    "zxing-wasm": "^2.2.4"
   },
   "engines": {
     "node": ">=20.9"

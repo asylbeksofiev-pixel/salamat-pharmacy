@@ -653,3 +653,60 @@ model CatalogItemCategoryChange {
   @@index([productId])
   @@map("catalog_item_category_changes")
 }
+
+/// Photo search for catalogue products without a photo (scripts/catalog-photos/internet.ts): one row per
+/// public.pharmacy_products.id with the best candidate, how it was matched and checked, its licence and, once
+/// published, the Vercel Blob URL written to pharmacy_products.image_url. Images themselves are never stored here.
+/// match_status: confirmed | probable | doubtful | no_match.
+/// review_status: auto (rule result) | approved / rejected (a person decided — automatic runs never overwrite these)
+/// | published | rolled_back.
+model CatalogPhotoResult {
+  productId      BigInt    @id @map("product_id")
+  article        String?
+  productName    String    @map("product_name")
+  matchStatus    String    @map("match_status")
+  matchMethod    String    @map("match_method")
+  confidence     Decimal   @db.Decimal(3, 2)
+  sourceName     String?   @map("source_name")
+  sourcePageUrl  String?   @map("source_page_url")
+  sourceImageUrl String?   @map("source_image_url")
+  storedImageUrl String?   @map("stored_image_url")
+  sourceLicense  String?   @map("source_license")
+  rightsStatus   String    @map("rights_status")
+  attribution    String?
+  manufacturer   String?
+  detectedGtin   String?   @map("detected_gtin")
+  width          Int?
+  height         Int?
+  fileSize       Int?      @map("file_size")
+  sha256         String?
+  reviewStatus   String    @default("auto") @map("review_status")
+  reason         String?
+  error          String?
+  runId          String?   @map("run_id")
+  checkedAt      DateTime  @map("checked_at")
+  publishedAt    DateTime? @map("published_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @default(now()) @map("updated_at")
+
+  @@index([matchStatus, reviewStatus])
+  @@index([runId])
+  @@index([sha256])
+  @@map("catalog_photo_results")
+}
+
+/// Every image_url written by a photo publication run, so exactly that run can be rolled back
+/// (previous_image_url is what the column held before — always empty, since only empty values are filled).
+model CatalogPhotoChange {
+  id               BigInt    @id @default(autoincrement())
+  runId            String    @map("run_id")
+  productId        BigInt    @map("product_id")
+  previousImageUrl String?   @map("previous_image_url")
+  newImageUrl      String    @map("new_image_url")
+  updatedAt        DateTime  @default(now()) @map("updated_at")
+  revertedAt       DateTime? @map("reverted_at")
+
+  @@index([runId])
+  @@index([productId])
+  @@map("catalog_photo_changes")
+}

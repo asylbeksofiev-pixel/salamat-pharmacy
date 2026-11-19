@@ -34,7 +34,12 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   poweredByHeader: false,
   images: {
-    remotePatterns: imageHosts.map((hostname) => ({ protocol: "https" as const, hostname })),
+    remotePatterns: [
+      ...imageHosts.map((hostname) => ({ protocol: "https" as const, hostname })),
+      // Product photos stored by scripts/catalog-photos/internet.ts in the project's public Vercel Blob store
+      // (<store-id>.public.blob.vercel-storage.com/products/<product id>/<sha256>.<ext>). Only that folder, no query.
+      { protocol: "https" as const, hostname: "*.public.blob.vercel-storage.com", pathname: "/products/**", search: "" },
+    ],
   },
   serverExternalPackages: ["exceljs", "nodemailer"],
   experimental: {
