@@ -1,5 +1,6 @@
 import Image from "next/image";
 import { cn } from "../ui/cn";
+import { ProductPhoto } from "./ProductPhoto";
 
 const optimisedHosts = new Set((process.env.IMAGE_HOSTS ?? "").split(",").map((h) => h.trim()).filter(Boolean));
 
@@ -32,17 +33,11 @@ export function ProductImage({ src, alt, noImageLabel, className, sizes = "(max-
     /* invalid URL */
   }
   const imgClass = "object-contain p-[8%] transition-transform duration-500 ease-[var(--ease-out-soft)] motion-safe:group-hover:scale-[1.03]";
-  if (host && optimisedHosts.has(host)) {
-    return (
-      <div className={cn("relative w-full overflow-hidden bg-white", aspect, radius, className)}>
-        <Image src={src} alt={alt} fill sizes={sizes} priority={priority} className={imgClass} />
-      </div>
-    );
-  }
+  // If the photo fails to load, the same box shows the placeholder instead of a broken-image icon.
+  const fallback = <ProductPlaceholder alt={alt} label={noImageLabel} compact={compact} aspect="" radius="" className="absolute inset-0 h-full" />;
   return (
     <div className={cn("relative w-full overflow-hidden bg-white", aspect, radius, className)}>
-      {/* eslint-disable-next-line @next/next/no-img-element -- host not configured for optimisation */}
-      <img src={src} alt={alt} loading={priority ? "eager" : "lazy"} decoding="async" className={cn("absolute inset-0 size-full", imgClass)} referrerPolicy="no-referrer" />
+      <ProductPhoto src={src} alt={alt} optimised={!!host && optimisedHosts.has(host)} sizes={sizes} priority={priority} className={imgClass} fallback={fallback} />
     </div>
   );
 }

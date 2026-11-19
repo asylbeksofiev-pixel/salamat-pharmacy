@@ -88,7 +88,7 @@ npm run db:demo
 | `npm run typecheck` | TypeScript | без ошибок |
 | `npm run lint` | ESLint (next/core-web-vitals, react-hooks) | 0 ошибок, 0 предупреждений |
 | `npm test` | Vitest: модульные и интеграционные тесты на PostgreSQL (`salamat_test`) | 93/93 |
-| `npm run test:e2e` | Playwright на production-сборке с демо-данными (`salamat_e2e_test`, порт 3100): сценарии + 12 проверок axe-core (WCAG 2.1 AA) | 32/32 |
+| `npm run test:e2e` | Playwright на production-сборке с демо-данными (`salamat_e2e_test`, порт 3100): сценарии + 14 проверок axe-core (WCAG 2.1 AA) | 35/35 |
 | `npm run build` | production-сборка | успешно |
 
 Тестовые базы пересоздаются при каждом запуске; скрипты отказываются трогать базу, в имени которой нет `test`.

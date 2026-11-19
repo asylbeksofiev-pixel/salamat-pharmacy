@@ -420,6 +420,59 @@ dialog.sal-drawer-bottom[data-closing] {
   }
 }
 
+/* Toasts sit above the bottom navigation and above the product action bar when it is shown, so a confirmation
+   never covers the main buttons, the name or the price. */
+.sal-toasts {
+  bottom: calc(var(--sal-bottom-nav-h, 4.5rem) + var(--sal-actionbar-h, 0px) + 0.75rem);
+}
+@media (min-width: 48rem) {
+  .sal-toasts {
+    bottom: 1.5rem;
+  }
+}
+
+/* Product page action bar (ProductPage.tsx): rests on top of the bottom navigation, slides in from under it
+   once the main action has scrolled away, and out again when it comes back or the keyboard is open. */
+.sal-actionbar {
+  bottom: var(--sal-bottom-nav-h, calc(3.75rem + env(safe-area-inset-bottom)));
+  transform: translateY(calc(100% + 1px));
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    transform 220ms var(--ease-out-soft),
+    opacity 180ms var(--ease-out-soft),
+    visibility 0s linear 220ms;
+}
+.sal-actionbar[data-shown] {
+  transform: none;
+  opacity: 1;
+  visibility: visible;
+  transition:
+    transform 220ms var(--ease-out-soft),
+    opacity 180ms var(--ease-out-soft),
+    visibility 0s;
+}
+
+/* Short inline confirmations on the product page ("in the cart", "copied"): fade and rise in, no layout jump
+   for the copy note (it sits at the end of the article line); an empty note has no height. */
+.sal-inline-note {
+  opacity: 0;
+  transform: translateY(3px);
+  transition: opacity 180ms var(--ease-out-soft), transform 180ms var(--ease-out-soft);
+}
+.sal-inline-note[data-shown] {
+  opacity: 1;
+  transform: none;
+}
+
+/* Product photo gallery: native swipe with snap, no visible scrollbar. */
+.sal-gallery {
+  scrollbar-width: none;
+}
+.sal-gallery::-webkit-scrollbar {
+  display: none;
+}
+
 /* Language switcher (HeaderParts.tsx): the white pill slides to the chosen language; --lang-i is its index. */
 .sal-lang-pill {
   transform: translateX(calc(var(--lang-i, 0) * 100%));

@@ -159,10 +159,10 @@ export function HeaderCounters() {
           aria-label={`${t.common.cart}${c ? `. ${fmt(t.header.cartCount, { count: c })}` : ""}`}
         >
           <span className="relative" data-cart-target>
-            <span key={bump} className={cn("grid place-items-center", bump > 0 && "sal-cart-bump")}>
+            <span key={`icon-${bump}`} className={cn("grid place-items-center", bump > 0 && "sal-cart-bump")}>
               <Icon name="cart" />
             </span>
-            {c ? <span key={c} className="sal-badge-bump absolute -top-2 -right-2.5 grid min-w-5 place-items-center rounded-full bg-accent-500 px-1 text-[0.7rem] leading-5 font-bold text-white" aria-hidden="true">{c}</span> : null}
+            {c ? <span key={`count-${c}`} className="sal-badge-bump absolute -top-2 -right-2.5 grid min-w-5 place-items-center rounded-full bg-accent-500 px-1 text-[0.7rem] leading-5 font-bold text-white" aria-hidden="true">{c}</span> : null}
           </span>
           <span className="hidden text-sm font-semibold lg:inline">{t.common.cart}</span>
         </Link>
@@ -342,8 +342,21 @@ export function MobileBottomNav() {
     setNav((s) => ({ shown: activeIndex, tapped: null, pulse: s.tapped === activeIndex ? s.pulse : s.pulse + 1 }));
   }
   const lit = nav.tapped ?? activeIndex;
+  // Publish the real height (including the safe area) so bars and toasts above it never overlap it.
+  const navRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const el = navRef.current;
+    if (!el || !("ResizeObserver" in window)) return;
+    const root = document.documentElement;
+    const ro = new ResizeObserver(() => root.style.setProperty("--sal-bottom-nav-h", `${el.offsetHeight}px`));
+    ro.observe(el);
+    return () => {
+      ro.disconnect();
+      root.style.removeProperty("--sal-bottom-nav-h");
+    };
+  }, []);
   return (
-    <nav aria-label={t.common.menu} style={{ viewTransitionName: "bottom-nav" }} className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden" lang={locale}>
+    <nav ref={navRef} aria-label={t.common.menu} style={{ viewTransitionName: "bottom-nav" }} className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden" lang={locale}>
       <ul className={cn("grid", items.length === 5 ? "grid-cols-5" : "grid-cols-4")}>
         {items.map((it, i) => {
           const active = i === activeIndex;
@@ -367,7 +380,7 @@ export function MobileBottomNav() {
                   key={on ? `on-${nav.pulse}` : "off"}
                   data-cart-target={it.href === "/cart" || undefined}
                   className={cn(
-                    "relative grid h-7 w-12 place-items-center rounded-full transition-[background-color,transform] duration-200 group-active:scale-90",
+                    "relative grid h-7 w-12 max-w-full place-items-center rounded-full transition-[background-color,transform] duration-200 group-active:scale-90",
                     on && "bg-brand-50",
                     on && nav.pulse > 0 && "sal-nav-pill",
                   )}
@@ -375,7 +388,7 @@ export function MobileBottomNav() {
                   <span key={it.href === "/cart" ? `b-${bump}` : undefined} className={cn("grid place-items-center", on && nav.pulse > 0 && "sal-nav-bounce", it.href === "/cart" && bump > 0 && "sal-cart-bump")}>
                     <Icon name={it.icon} size={22} />
                   </span>
-                  {it.badge ? <span key={it.badge} className="sal-badge-bump absolute -top-1 right-1 grid min-w-4.5 place-items-center rounded-full bg-accent-500 px-1 text-[0.62rem] leading-[1.125rem] font-bold text-white" aria-hidden="true">{it.badge}</span> : null}
+                  {it.badge ? <span key={`count-${it.badge}`} className="sal-badge-bump absolute -top-1 right-1 grid min-w-4.5 place-items-center rounded-full bg-accent-500 px-1 text-[0.62rem] leading-[1.125rem] font-bold text-white" aria-hidden="true">{it.badge}</span> : null}
                 </span>
                 <span className={cn("max-w-full truncate px-0.5", on && "font-semibold")}>{it.label}</span>
               </Link>

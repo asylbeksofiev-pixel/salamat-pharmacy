@@ -24,7 +24,7 @@ function Toast({ item, closeLabel, onRemove }: { item: ToastItem; closeLabel: st
     const timer = window.setTimeout(() => {
       if (closing) onRemove(item.id);
       else setClosing(true);
-    }, closing ? 200 : 4500);
+    }, closing ? 200 : 3800);
     return () => window.clearTimeout(timer);
   }, [closing, item.id, onRemove]);
 
@@ -61,14 +61,15 @@ export function ToastProvider({ children, closeLabel }: { children: ReactNode; c
   const push = useCallback(
     (text: string, tone: ToastTone = "success", action?: ToastItem["action"]) => {
       const id = ++seq.current;
-      setItems((l) => [...l.slice(-2), { id, text, tone, action }]);
+      // One message at a time: a new confirmation replaces the previous one instead of stacking over the page.
+      setItems([{ id, text, tone, action }]);
     },
     [],
   );
   return (
     <ToastContext.Provider value={push}>
       {children}
-      <div className="pointer-events-none fixed inset-x-0 bottom-20 z-[60] flex flex-col items-center gap-2 px-4 md:bottom-6" role="status" aria-live="polite">
+      <div className="sal-toasts pointer-events-none fixed inset-x-0 z-[60] flex flex-col items-center gap-2 px-4" role="status" aria-live="polite">
         {items.map((item) => <Toast key={item.id} item={item} closeLabel={closeLabel} onRemove={remove} />)}
       </div>
     </ToastContext.Provider>
