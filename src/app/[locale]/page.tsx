@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getDictionary, isLocale, localizedPath } from "@/lib/i18n";
+import { getDictionary, isLocale, type Locale, localizedPath } from "@/lib/i18n";
 import { fmt, localeTags } from "@/lib/i18n/config";
 import { formatPhone, telHref } from "@/lib/format";
 import { getCategoryTree } from "@/server/catalog";
@@ -44,9 +44,9 @@ function SectionTitle({ id, title, action, text }: { id: string; title: string; 
 }
 
 /** Catalogue preview for the home page; on a database error the section still leads to the catalogue. */
-async function catalogPreview(): Promise<CatalogItem[]> {
+async function catalogPreview(locale: Locale): Promise<CatalogItem[]> {
   try {
-    return await listCatalogPreview(12);
+    return await listCatalogPreview(12, locale);
   } catch (e) {
     console.error("catalog preview failed", (e as Error).message.slice(0, 200));
     return [];
@@ -64,7 +64,7 @@ export default async function HomePage({ params }: PageProps<"/[locale]">) {
     getActivePromotions(locale),
     getSettings(),
     getStorefrontState(),
-    catalogPreview(),
+    catalogPreview(locale),
   ]);
   // Only sections that really contain products; with no categorised products the block becomes a catalogue entry.
   const roots = tree.roots.filter((c) => store.categoryIdsWithProducts.has(c.id));
@@ -196,7 +196,7 @@ export default async function HomePage({ params }: PageProps<"/[locale]">) {
           <ul className="sal-home-grid grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {roots.map((c) => (
               <li key={c.slug} data-home-reveal>
-                <CategoryTile slug={c.slug} name={c.name} iconKey={c.iconKey} locale={locale} />
+                <CategoryTile slug={c.slug} name={c.name} iconKey={c.iconKey} locale={locale} count={store.catalogCategoryCounts.get(c.id)} />
               </li>
             ))}
           </ul>

@@ -29,7 +29,7 @@ export default async function CatalogItemPage({ params }: PageProps<"/[locale]/c
   const { locale, id } = await params;
   if (!isLocale(locale) || !isCatalogId(id)) notFound();
   const t = getDictionary(locale);
-  const [item, pharmacy, settings, store] = await Promise.all([getCatalogItem(id), getSelectedPharmacy(locale), getSettings(), getStorefrontState()]);
+  const [item, pharmacy, settings, store] = await Promise.all([getCatalogItem(id, locale), getSelectedPharmacy(locale), getSettings(), getStorefrontState()]);
   if (!item) notFound();
   const href = (p: string) => localizedPath(locale, p);
   // A selected pharmacy without a known phone falls back to the helpline, and says so.
@@ -42,7 +42,12 @@ export default async function CatalogItemPage({ params }: PageProps<"/[locale]/c
       <Breadcrumbs
         label={t.common.breadcrumbs}
         baseUrl={env.appUrl}
-        items={[{ label: t.common.home, href: href("/") }, { label: t.catalog.title, href: href("/catalog") }, { label: item.name }]}
+        items={[
+          { label: t.common.home, href: href("/") },
+          { label: t.catalog.title, href: href("/catalog") },
+          ...(item.category && item.categorySlug ? [{ label: item.category, href: href(`/catalog/${item.categorySlug}`) }] : []),
+          { label: item.name },
+        ]}
       />
       <div className="mt-4 grid gap-6 md:mt-6 md:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:gap-8">
         {/* Photo column on tablets and desktops; on phones the photo sits inside the main block. */}
@@ -76,7 +81,11 @@ export default async function CatalogItemPage({ params }: PageProps<"/[locale]/c
                 </div>
               ) : null}
               <div className="min-w-0 flex-1">
-                {item.category ? <p className="text-sm font-semibold text-brand-700">{item.category}</p> : null}
+                {item.category && item.categorySlug ? (
+                  <Link href={href(`/catalog/${item.categorySlug}`)} className="text-sm font-semibold text-brand-700 hover:underline">
+                    {item.category}
+                  </Link>
+                ) : null}
                 <h1 id="item-title" lang={dataLang(locale, item.name)} className="text-[1.3rem] leading-tight font-bold tracking-tight break-words text-ink sm:text-[1.75rem] md:text-[1.9rem]">
                   {item.name}
                 </h1>

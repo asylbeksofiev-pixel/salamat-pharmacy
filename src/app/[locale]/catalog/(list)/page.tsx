@@ -1,42 +1,29 @@
 import { notFound } from "next/navigation";
 import { getDictionary, isLocale, localizedPath } from "@/lib/i18n";
 import { getCategoryTree } from "@/server/catalog";
-import { listCatalogItems, type CatalogPage } from "@/server/catalog-items";
+import { loadCatalogListing } from "@/server/catalog-listing";
 import { pageMetadata } from "@/server/seo";
 import { env } from "@/server/env";
 import { getStorefrontState } from "@/server/storefront";
+import { activeFilterCount, parseCatalogQuery } from "@/lib/catalog-params";
 import { CatalogItemsView } from "@/components/catalog/CatalogItems";
 import { CategoryTile } from "@/components/catalog/Tiles";
-
-function readParams(sp: Record<string, string | string[] | undefined>) {
-  const q = typeof sp.q === "string" ? sp.q.trim().slice(0, 100) : "";
-  const page = typeof sp.page === "string" && /^\d{1,6}$/.test(sp.page) ? Math.max(1, Number(sp.page)) : 1;
-  return { q, page };
-}
 
 export async function generateMetadata({ params, searchParams }: PageProps<"/[locale]/catalog">) {
   const { locale } = await params;
   if (!isLocale(locale)) return {};
   const t = getDictionary(locale);
-  const { q, page } = readParams(await searchParams);
-  return pageMetadata(locale, "/catalog", t.meta.catalogTitle, t.meta.catalogDescription, { noindex: !!q || page > 1 });
+  const query = parseCatalogQuery(await searchParams);
+  return pageMetadata(locale, "/catalog", t.meta.catalogTitle, t.meta.catalogDescription, { noindex: !!query.q || query.page > 1 || activeFilterCount(query) > 0 || !!query.sort });
 }
 
 export default async function CatalogPage({ params, searchParams }: PageProps<"/[locale]/catalog">) {
   const { locale } = await params;
   if (!isLocale(locale)) notFound();
   const t = getDictionary(locale);
-  const { q, page } = readParams(await searchParams);
-  const [tree, store] = await Promise.all([getCategoryTree(locale), getStorefrontState()]);
+  const [listing, tree, store] = await Promise.all([loadCatalogListing({ locale, searchParams: await searchParams }), getCategoryTree(locale), getStorefrontState()]);
   const roots = tree.roots.filter((c) => store.categoryIdsWithProducts.has(c.id));
-  let result: CatalogPage | null = null;
-  let failed = false;
-  try {
-    result = await listCatalogItems({ q, page });
-  } catch (e) {
-    failed = true;
-    console.error("catalog items failed", (e as Error).message.slice(0, 200));
-  }
+  const unfiltered = !listing.query.q && activeFilterCount(listing.query) === 0;
   return (
     <CatalogItemsView
       locale={locale}
@@ -44,12 +31,13 @@ export default async function CatalogPage({ params, searchParams }: PageProps<"/
       title={t.catalog.title}
       crumbs={[{ label: t.common.home, href: localizedPath(locale, "/") }, { label: t.catalog.title }]}
       basePath={localizedPath(locale, "/catalog")}
-      q={q}
-      result={result}
-      failed={failed}
+      query={listing.query}
+      result={listing.result}
+      failed={listing.failed}
+      filters={listing.filters}
       baseUrl={env.appUrl}
       after={
-        roots.length ? (
+        roots.length && unfiltered ? (
           <section aria-labelledby="catalog-sections" className="mt-12">
             <h2 id="catalog-sections" className="mb-4 text-xl font-bold">
               {t.items.categoriesTitle}
@@ -57,7 +45,7 @@ export default async function CatalogPage({ params, searchParams }: PageProps<"/
             <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {roots.map((c) => (
                 <li key={c.slug}>
-                  <CategoryTile slug={c.slug} name={c.name} iconKey={c.iconKey} locale={locale} />
+                  <CategoryTile slug={c.slug} name={c.name} iconKey={c.iconKey} locale={locale} count={store.catalogCategoryCounts.get(c.id)} />
                 </li>
               ))}
             </ul>

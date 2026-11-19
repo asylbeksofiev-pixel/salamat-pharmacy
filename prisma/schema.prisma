@@ -151,6 +151,7 @@ model Category {
 
   products            Product[]
   promotionCategories PromotionCategory[]
+  catalogItems        CatalogItemCategory[]
 
   @@index([parentId])
 }
@@ -598,4 +599,57 @@ model CatalogImage {
   createdAt      DateTime @default(now()) @map("created_at")
 
   @@map("catalog_images")
+}
+
+/// Section of each catalogue product (public.pharmacy_products.id — unique, the article may repeat).
+/// Written by scripts/classify-catalog.ts; the catalogue table itself is never modified.
+/// review_status: "auto" (rule result, shown in sections) | "needs_review" (kept in the general catalogue only;
+/// category_id is a suggestion or null) | "confirmed" (set by a person; automatic runs never overwrite it).
+model CatalogItemCategory {
+  productId         BigInt    @id @map("product_id")
+  categoryId        String?   @map("category_id")
+  category          Category? @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  confidence        Decimal   @db.Decimal(3, 2)
+  method            String
+  reason            String
+  reviewStatus      String    @map("review_status")
+  classifierVersion String    @map("classifier_version")
+  runId             String?   @map("run_id")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  @@index([categoryId, reviewStatus])
+  @@index([reviewStatus])
+  @@index([runId])
+  @@map("catalog_item_categories")
+}
+
+/// One automatic classification run (apply) or its rollback; stats hold the counts reported by the script.
+model CatalogClassificationRun {
+  id                String    @id @default(cuid())
+  mode              String
+  classifierVersion String    @map("classifier_version")
+  startedAt         DateTime  @default(now()) @map("started_at")
+  finishedAt        DateTime? @map("finished_at")
+  rolledBackAt      DateTime? @map("rolled_back_at")
+  stats             Json?
+
+  changes CatalogItemCategoryChange[]
+
+  @@map("catalog_classification_runs")
+}
+
+/// What a run changed, so exactly those assignments can be rolled back (previous = null: the row was created).
+model CatalogItemCategoryChange {
+  id        BigInt                   @id @default(autoincrement())
+  runId     String                   @map("run_id")
+  run       CatalogClassificationRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  productId BigInt                   @map("product_id")
+  previous  Json?
+  next      Json
+  createdAt DateTime                 @default(now()) @map("created_at")
+
+  @@index([runId])
+  @@index([productId])
+  @@map("catalog_item_category_changes")
 }

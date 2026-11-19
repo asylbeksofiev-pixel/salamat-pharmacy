@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { getDictionary, isLocale, localizedPath } from "@/lib/i18n";
 import { fmt } from "@/lib/i18n/config";
-import { listCatalogItems, type CatalogPage } from "@/server/catalog-items";
+import { loadCatalogListing } from "@/server/catalog-listing";
 import { pageMetadata } from "@/server/seo";
 import { env } from "@/server/env";
 import { CatalogItemsView } from "@/components/catalog/CatalogItems";
@@ -19,17 +19,8 @@ export default async function SearchPage({ params, searchParams }: PageProps<"/[
   const { locale } = await params;
   if (!isLocale(locale)) notFound();
   const t = getDictionary(locale);
-  const sp = await searchParams;
-  const q = typeof sp.q === "string" ? sp.q.trim().slice(0, 100) : "";
-  const page = typeof sp.page === "string" && /^\d{1,6}$/.test(sp.page) ? Math.max(1, Number(sp.page)) : 1;
-  let result: CatalogPage | null = null;
-  let failed = false;
-  try {
-    result = await listCatalogItems({ q, page });
-  } catch (e) {
-    failed = true;
-    console.error("catalog search failed", (e as Error).message.slice(0, 200));
-  }
+  const listing = await loadCatalogListing({ locale, searchParams: await searchParams });
+  const q = listing.query.q;
   return (
     <CatalogItemsView
       locale={locale}
@@ -37,9 +28,10 @@ export default async function SearchPage({ params, searchParams }: PageProps<"/[
       title={q ? fmt(t.search.resultsFor, { q }) : t.meta.searchTitle}
       crumbs={[{ label: t.common.home, href: localizedPath(locale, "/") }, { label: t.meta.searchTitle }]}
       basePath={localizedPath(locale, "/search")}
-      q={q}
-      result={result}
-      failed={failed}
+      query={listing.query}
+      result={listing.result}
+      failed={listing.failed}
+      filters={listing.filters}
       baseUrl={env.appUrl}
     />
   );

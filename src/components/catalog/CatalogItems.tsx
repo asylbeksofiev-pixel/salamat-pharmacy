@@ -11,6 +11,8 @@ import { EmptyState, ErrorState, Notice } from "../ui/Feedback";
 import { ButtonLink } from "../ui/Button";
 import { Icon } from "../icons";
 import { CatalogSearchForm } from "./CatalogSearchForm";
+import { ItemFilters, ItemSort, type SectionOption, type SortOption } from "./ItemFilters";
+import { activeFilterCount, catalogQueryString, type CatalogQuery } from "@/lib/catalog-params";
 import { CatalogCartButton, FavoriteButton } from "./OfferActions";
 import { ProductImage } from "./ProductImage";
 
@@ -117,12 +119,83 @@ export function CatalogItemGrid({ items, t, locale, className, reveal = false, g
   );
 }
 
-function pageHref(basePath: string, q: string | null, page: number) {
-  const p = new URLSearchParams();
-  if (q) p.set("q", q);
-  if (page > 1) p.set("page", String(page));
-  const s = p.toString();
-  return s ? `${basePath}?${s}` : basePath;
+export interface CatalogFiltersConfig {
+  sectionMode: "multi" | "links";
+  sections: SectionOption[];
+  /** For sectionMode "links": the current section and where other sections live. */
+  currentSection?: string | null;
+  sectionBase?: string;
+  allSectionsHref?: string;
+  pricesAvailable: boolean;
+  priceRange: { min: number; max: number; minLabel: string; maxLabel: string } | null;
+  popularityAvailable: boolean;
+}
+
+function sortOptions(t: Dictionary, q: string, cfg: CatalogFiltersConfig): SortOption[] {
+  const out: SortOption[] = [];
+  if (q) out.push({ value: "relevance", label: t.catalog.sortRelevance });
+  out.push({ value: "popular", label: t.catalog.sortPopular, disabled: !cfg.popularityAvailable, hint: t.catalog.popularUnavailable });
+  out.push({ value: "price_asc", label: t.catalog.sortPriceAsc, disabled: !cfg.pricesAvailable, hint: t.catalog.priceSortUnavailable });
+  out.push({ value: "price_desc", label: t.catalog.sortPriceDesc, disabled: !cfg.pricesAvailable, hint: t.catalog.priceSortUnavailable });
+  out.push({ value: "name_asc", label: t.catalog.sortName });
+  out.push({ value: "name_desc", label: t.catalog.sortNameDesc });
+  return out;
+}
+
+/** Parameters a new search keeps (sections, filters and sort), as [name, value] pairs. */
+function keptParams(query: CatalogQuery): [string, string][] {
+  const out: [string, string][] = query.categories.map((c) => ["category", c]);
+  if (query.priceMin !== undefined) out.push(["priceMin", String(query.priceMin)]);
+  if (query.priceMax !== undefined) out.push(["priceMax", String(query.priceMax)]);
+  if (query.hasPrice) out.push(["hasPrice", "1"]);
+  if (query.hasPhoto) out.push(["hasPhoto", "1"]);
+  if (query.sort && query.sort !== "relevance") out.push(["sort", query.sort]);
+  return out;
+}
+
+const NO_FILTERS: Partial<CatalogQuery> = { categories: [], priceMin: undefined, priceMax: undefined, hasPrice: false, hasPhoto: false };
+
+/** Removable chips for the active filters, plus "Reset filters". Plain links: work without JavaScript. */
+function FilterChips({ t, locale, basePath, query, cfg }: { t: Dictionary; locale: Locale; basePath: string; query: CatalogQuery; cfg: CatalogFiltersConfig | null }) {
+  const nf = (n: number) => n.toLocaleString(localeTags[locale]);
+  const chips: { key: string; label: string; href: string }[] = [];
+  if (cfg?.sectionMode !== "links") {
+    for (const slug of query.categories) {
+      const name = cfg?.sections.find((s) => s.slug === slug)?.name ?? slug;
+      chips.push({ key: `c-${slug}`, label: name, href: basePath + catalogQueryString(query, { categories: query.categories.filter((c) => c !== slug) }) });
+    }
+  }
+  if (query.priceMin !== undefined || query.priceMax !== undefined) {
+    const label =
+      query.priceMin !== undefined && query.priceMax !== undefined
+        ? fmt(t.catalog.priceChipRange, { min: nf(query.priceMin), max: nf(query.priceMax) })
+        : query.priceMin !== undefined
+          ? fmt(t.catalog.priceChipFrom, { min: nf(query.priceMin) })
+          : fmt(t.catalog.priceChipTo, { max: nf(query.priceMax!) });
+    chips.push({ key: "price", label, href: basePath + catalogQueryString(query, { priceMin: undefined, priceMax: undefined }) });
+  }
+  if (query.hasPrice) chips.push({ key: "hasPrice", label: t.catalog.withPrice, href: basePath + catalogQueryString(query, { hasPrice: false }) });
+  if (query.hasPhoto) chips.push({ key: "hasPhoto", label: t.catalog.withPhoto, href: basePath + catalogQueryString(query, { hasPhoto: false }) });
+  if (!chips.length) return null;
+  return (
+    <div className="mt-3 flex flex-wrap items-center gap-2" aria-label={t.catalog.activeFilters} role="group">
+      {chips.map((c) => (
+        <Link
+          key={c.key}
+          href={c.href}
+          scroll={false}
+          className="press inline-flex min-h-9 items-center gap-1.5 rounded-full border border-brand-200 bg-brand-50 py-1 pr-2.5 pl-3 text-sm font-medium text-brand-800 hover:border-brand-600 focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-brand-600"
+          aria-label={fmt(t.catalog.removeFilter, { name: c.label })}
+        >
+          <span className="max-w-[16rem] truncate">{c.label}</span>
+          <Icon name="close" size={14} />
+        </Link>
+      ))}
+      <Link href={basePath + catalogQueryString(query, NO_FILTERS)} scroll={false} className="inline-flex min-h-9 items-center rounded-full px-2 text-sm font-semibold text-brand-700 hover:underline">
+        {t.catalog.resetFilters}
+      </Link>
+    </div>
+  );
 }
 
 export function CatalogItemsView({
@@ -131,10 +204,11 @@ export function CatalogItemsView({
   title,
   crumbs,
   basePath,
-  q,
+  query,
   result,
   failed,
   baseUrl,
+  filters,
   before,
   after,
 }: {
@@ -143,64 +217,121 @@ export function CatalogItemsView({
   title: string;
   crumbs: Crumb[];
   basePath: string;
-  q: string;
+  query: CatalogQuery;
   result: CatalogPage | null;
   failed: boolean;
   baseUrl: string;
+  /** Filter/sort configuration; null hides filters (e.g. when the data has nothing to filter by). */
+  filters: CatalogFiltersConfig | null;
   before?: React.ReactNode;
   after?: React.ReactNode;
 }) {
+  const q = query.q;
   const outOfRange = !!result && result.total > 0 && result.items.length === 0;
+  const activeCount = activeFilterCount(filters?.sectionMode === "links" ? { ...query, categories: [] } : query);
+  const listQuery: CatalogQuery = { ...query, q: result?.query ?? query.q };
+  const href = (overrides: Partial<CatalogQuery> = {}) => basePath + catalogQueryString(listQuery, overrides);
+  const pricedFilterWithoutPrices = !!filters && !filters.pricesAvailable && (query.hasPrice || query.priceMin !== undefined || query.priceMax !== undefined);
   return (
     <div className="container-page py-6 md:py-8">
       <Breadcrumbs items={crumbs} label={t.common.breadcrumbs} baseUrl={baseUrl} />
       <h1 className="mt-4 text-[1.75rem] leading-tight font-bold tracking-tight text-ink sm:text-[2.1rem]">{title}</h1>
       <div className="mt-4">
-        <CatalogSearchForm action={basePath} q={q} />
+        <CatalogSearchForm action={basePath} q={q} keep={keptParams(query)} />
       </div>
       {before}
       {failed || !result ? (
         <div className="mt-6">
-          <ErrorState title={t.items.loadError} text={t.items.loadErrorText} action={<ButtonLink href={pageHref(basePath, q || null, 1)}>{t.common.retry}</ButtonLink>} />
+          <ErrorState title={t.items.loadError} text={t.items.loadErrorText} action={<ButtonLink href={href({ page: 1 })}>{t.common.retry}</ButtonLink>} />
         </div>
       ) : (
-        <>
-          <div className="mt-5 flex flex-wrap items-baseline justify-between gap-2">
-            <p className="text-sm text-muted" aria-live="polite">
-              {fmt(q ? t.items.totalFound : t.items.total, { count: result.total.toLocaleString(localeTags[locale]) })}
-              {result.pageCount > 1 && !outOfRange ? ` · ${fmt(t.items.pageOf, { page: result.page, pages: result.pageCount })}` : ""}
-            </p>
-          </div>
-          {result.layoutFixed && result.query ? (
-            <Notice tone="info" className="mt-3">
-              {fmt(t.search.layoutFixed, { q: result.query })}
-            </Notice>
+        <div className={filters ? "mt-5 lg:grid lg:grid-cols-[15.5rem_minmax(0,1fr)] lg:gap-8" : "mt-5"}>
+          {filters ? (
+            <aside className="lg:sticky lg:top-28 lg:max-h-[calc(100dvh-8rem)] lg:self-start lg:overflow-y-auto lg:pr-1">
+              <div className="hidden lg:block">
+                <ItemFilters
+                  basePath={basePath}
+                  query={query}
+                  sectionMode={filters.sectionMode}
+                  sections={filters.sections}
+                  currentSection={filters.currentSection}
+                  sectionLinks={filters.sectionMode === "links" ? { base: filters.sectionBase ?? "", all: filters.allSectionsHref ?? "", search: catalogQueryString({ ...query, categories: [] }) } : undefined}
+                  pricesAvailable={filters.pricesAvailable}
+                  priceRange={filters.priceRange}
+                  activeCount={activeCount}
+                  variant="sidebar"
+                />
+              </div>
+            </aside>
           ) : null}
-          <Notice tone="info" className="mt-3">
-            {t.items.noPriceNote}
-          </Notice>
-          {result.items.length ? (
-            <>
-              <CatalogItemGrid items={result.items} t={t} locale={locale} className="mt-5" />
-              <Pagination
-                page={result.page}
-                pageCount={result.pageCount}
-                hrefFor={(p) => pageHref(basePath, result.query, p)}
-                labels={{ nav: t.common.pagination, previous: t.common.previous, next: t.common.next, page: t.common.page }}
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
+              <p className="text-sm text-muted" aria-live="polite">
+                {fmt(q || activeCount ? t.items.totalFound : t.items.total, { count: result.total.toLocaleString(localeTags[locale]) })}
+                {result.pageCount > 1 && !outOfRange ? ` · ${fmt(t.items.pageOf, { page: result.page, pages: result.pageCount })}` : ""}
+              </p>
+              {filters ? (
+                <div className="flex w-full items-center gap-2 sm:w-auto">
+                  <div className="lg:hidden">
+                    <ItemFilters
+                      basePath={basePath}
+                      query={query}
+                      sectionMode={filters.sectionMode}
+                      sections={filters.sections}
+                      currentSection={filters.currentSection}
+                      sectionLinks={filters.sectionMode === "links" ? { base: filters.sectionBase ?? "", all: filters.allSectionsHref ?? "", search: catalogQueryString({ ...query, categories: [] }) } : undefined}
+                      pricesAvailable={filters.pricesAvailable}
+                      priceRange={filters.priceRange}
+                      activeCount={activeCount}
+                      variant="drawer"
+                    />
+                  </div>
+                  <ItemSort basePath={basePath} query={query} options={sortOptions(t, q, filters)} current={result.sort} />
+                </div>
+              ) : null}
+            </div>
+            <FilterChips t={t} locale={locale} basePath={basePath} query={query} cfg={filters} />
+            {result.layoutFixed && result.query ? (
+              <Notice tone="info" className="mt-3">
+                {fmt(t.search.layoutFixed, { q: result.query })}
+              </Notice>
+            ) : null}
+            {!filters?.pricesAvailable ? (
+              <Notice tone="info" className="mt-3">
+                {t.items.noPriceNote}
+              </Notice>
+            ) : null}
+            {result.items.length ? (
+              <>
+                <CatalogItemGrid items={result.items} t={t} locale={locale} className="mt-5" grid={filters ? "grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 xl:grid-cols-4" : PRODUCT_GRID} />
+                <Pagination
+                  page={result.page}
+                  pageCount={result.pageCount}
+                  hrefFor={(p) => href({ page: p })}
+                  labels={{ nav: t.common.pagination, previous: t.common.previous, next: t.common.next, page: t.common.page }}
+                />
+              </>
+            ) : outOfRange ? (
+              <EmptyState className="mt-6" icon="search" title={t.items.pageOutOfRange} action={<ButtonLink href={href({ page: 1 })}>{t.items.firstPage}</ButtonLink>} />
+            ) : activeCount ? (
+              <EmptyState
+                className="mt-6"
+                icon="filter"
+                title={t.catalog.emptyFilteredTitle}
+                text={pricedFilterWithoutPrices ? t.catalog.emptyPriceText : t.catalog.emptyFilteredText}
+                action={<ButtonLink href={href(NO_FILTERS)} variant="outline">{t.catalog.resetFilters}</ButtonLink>}
               />
-            </>
-          ) : outOfRange ? (
-            <EmptyState className="mt-6" icon="search" title={t.items.pageOutOfRange} action={<ButtonLink href={pageHref(basePath, result.query, 1)}>{t.items.firstPage}</ButtonLink>} />
-          ) : (
-            <EmptyState
-              className="mt-6"
-              icon="search"
-              title={q ? fmt(t.search.nothingFound, { q }) : t.catalog.emptyTitle}
-              text={q ? t.search.nothingFoundHint : t.catalog.emptyCatalog}
-              action={q ? <ButtonLink href={basePath} variant="outline">{t.items.allProducts}</ButtonLink> : null}
-            />
-          )}
-        </>
+            ) : (
+              <EmptyState
+                className="mt-6"
+                icon="search"
+                title={q ? fmt(t.search.nothingFound, { q }) : t.catalog.emptyTitle}
+                text={q ? t.search.nothingFoundHint : t.catalog.emptyCatalog}
+                action={q ? <ButtonLink href={basePath + catalogQueryString({ ...query, q: "" })} variant="outline">{t.items.allProducts}</ButtonLink> : null}
+              />
+            )}
+          </div>
+        </div>
       )}
       {after}
     </div>
