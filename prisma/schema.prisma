@@ -247,8 +247,32 @@ model Pharmacy {
   orders              Order[]
   managers            AdminUserPharmacy[]
   promotionPharmacies PromotionPharmacy[]
+  photos              PharmacyPhoto[]
 
   @@index([cityId])
+}
+
+enum PharmacyPhotoKind {
+  EXTERIOR
+  INTERIOR
+}
+
+/// Photo of a specific branch. Published only with a confirmed right to use it (who provided it, on what terms).
+model PharmacyPhoto {
+  id                String            @id @default(cuid())
+  pharmacyId        String
+  pharmacy          Pharmacy          @relation(fields: [pharmacyId], references: [id], onDelete: Cascade)
+  url               String // https only
+  kind              PharmacyPhotoKind @default(EXTERIOR)
+  source            String // who provided the photo (e.g. "SALAMAT", photographer)
+  license           String // terms of use as agreed (e.g. "Собственность SALAMAT", "CC BY-SA 4.0")
+  sourceUrl         String?
+  rightsConfirmedAt DateTime
+  confirmedById     String?
+  sortOrder         Int               @default(0)
+  createdAt         DateTime          @default(now())
+
+  @@index([pharmacyId, sortOrder])
 }
 
 model Inventory {

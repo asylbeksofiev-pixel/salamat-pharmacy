@@ -88,7 +88,6 @@ function Fields({ props, draft, setDraft, idp, onInstant }: { props: FilterProps
                 <li key={s.slug}>
                   <a href={`${props.sectionLinks!.base}/${s.slug}${props.sectionLinks!.search}`} aria-current={s.slug === props.currentSection ? "page" : undefined} className={cn(ROW, s.slug === props.currentSection && "bg-brand-50 font-semibold text-brand-800")}>
                     <span className="min-w-0 flex-1">{s.name}</span>
-                    <span className="text-sm text-muted tabular-nums">{s.countLabel}</span>
                   </a>
                 </li>
               ))}
@@ -110,10 +109,6 @@ function Fields({ props, draft, setDraft, idp, onInstant }: { props: FilterProps
                         className={BOX}
                       />
                       <span className="min-w-0 flex-1">{s.name}</span>
-                      <span className="text-sm text-muted tabular-nums" aria-hidden="true">
-                        {s.countLabel}
-                      </span>
-                      <span className="sr-only">({s.countLabel})</span>
                     </label>
                   </li>
                 );

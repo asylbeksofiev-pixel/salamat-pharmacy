@@ -66,11 +66,11 @@ export function Button({ variant = "primary", size = "md", loading, icon, iconRi
   );
 }
 
-type LinkProps = ComponentProps<typeof Link> & { variant?: ButtonVariant; size?: ButtonSize; icon?: IconName; iconRight?: IconName };
+type LinkProps = ComponentProps<typeof Link> & { variant?: ButtonVariant; size?: ButtonSize; icon?: IconName; iconRight?: IconName; wrap?: boolean };
 
-export function ButtonLink({ variant = "primary", size = "md", icon, iconRight, className, children, ...rest }: LinkProps) {
+export function ButtonLink({ variant = "primary", size = "md", icon, iconRight, className, children, wrap = false, ...rest }: LinkProps) {
   return (
-    <Link className={buttonClass(variant, size, className)} {...rest}>
+    <Link className={buttonClass(variant, size, className, wrap)} {...rest}>
       {icon ? <Icon name={icon} size={size === "sm" ? 18 : 20} /> : null}
       {children}
       {iconRight ? <Icon name={iconRight} size={size === "sm" ? 18 : 20} /> : null}

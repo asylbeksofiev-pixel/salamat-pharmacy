@@ -1,14 +1,15 @@
 import Link from "next/link";
-import { getDictionary, type Dictionary, type Locale } from "@/lib/i18n";
+import type { Dictionary, Locale } from "@/lib/i18n";
 import { dataLang, fmt, localeTags, localizedPath } from "@/lib/i18n/config";
 import { formatDate, formatKzt, formatPhone, telHref } from "@/lib/format";
 import type { PharmacyView } from "@/server/pharmacies";
 import type { PromotionView } from "@/server/promotions";
 import { Icon, isIconName } from "../icons";
+import { PharmacyGallery } from "../pharmacy/PharmacyGallery";
 import { Badge } from "../ui/Feedback";
 import { SelectPharmacyButton } from "./SelectPharmacyButton";
 
-export function CategoryTile({ slug, name, iconKey, locale, count }: { slug: string; name: string; iconKey: string | null; locale: Locale; count?: number }) {
+export function CategoryTile({ slug, name, iconKey, locale }: { slug: string; name: string; iconKey: string | null; locale: Locale }) {
   return (
     <Link
       href={localizedPath(locale, `/catalog/${slug}`)}
@@ -19,7 +20,6 @@ export function CategoryTile({ slug, name, iconKey, locale, count }: { slug: str
       </span>
       <span className="min-w-0 flex-1">
         <span className="block leading-snug font-semibold text-ink">{name}</span>
-        {count !== undefined ? <span className="text-sm text-muted">{fmt(getDictionary(locale).items.total, { count: count.toLocaleString(localeTags[locale]) })}</span> : null}
       </span>
       <Icon name="chevronRight" size={18} className="shrink-0 text-line-strong transition-colors group-hover:text-brand-600" />
     </Link>
@@ -28,7 +28,9 @@ export function CategoryTile({ slug, name, iconKey, locale, count }: { slug: str
 
 export function PharmacyCard({ p, t, locale, selected, routes }: { p: PharmacyView; t: Dictionary; locale: Locale; selected: boolean; routes: { twoGis: string; yandex: string } }) {
   return (
-    <article data-selected={selected || undefined} className={`sal-pharmacy-card flex h-full flex-col gap-3 rounded-[var(--radius-xl)] border bg-white p-4 sm:p-5 ${selected ? "border-brand-600 ring-1 ring-brand-600" : "border-line"}`}>
+    <article data-selected={selected || undefined} className={`sal-pharmacy-card flex h-full flex-col gap-3 overflow-hidden rounded-[var(--radius-xl)] border bg-white p-4 sm:p-5 ${selected ? "border-brand-600 ring-1 ring-brand-600" : "border-line"}`}>
+      {/* Branch photos first (only confirmed ones), then address, contacts and buttons. */}
+      {p.photos.length ? <PharmacyGallery photos={p.photos} address={p.address} className="-mx-4 -mt-4 sm:-mx-5 sm:-mt-5 [&>figcaption]:px-4 sm:[&>figcaption]:px-5" /> : null}
       <div className="flex items-start justify-between gap-3">
         <h3 className="leading-snug font-semibold text-ink" lang={dataLang(locale, p.address)}>
           <Link href={localizedPath(locale, `/pharmacies/${p.slug}`)} className="transition-colors hover:text-brand-700 hover:underline">

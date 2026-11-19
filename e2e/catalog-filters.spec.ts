@@ -30,22 +30,23 @@ test("catalogue sections and filters: URL state, chips, reset, Back/Forward, rel
   await aside.getByLabel(/Медицинские приборы и изделия/).check();
   await expect(page).toHaveURL(/category=medicinskie-pribory-i-izdeliya/);
   const main = page.locator("main");
-  await expect(main).toContainText(`Найдено товаров: ${bandages}`);
+  // No product counters on the site: results are checked by the cards themselves.
   await expect(main.locator("article")).toHaveCount(bandages);
+  await expect(main).not.toContainText("Найдено товаров");
   const chips = page.getByRole("group", { name: "Выбранные фильтры" });
   await expect(chips).toContainText("Медицинские приборы и изделия");
 
   // Several sections: OR.
   await aside.getByLabel(/Гигиена/).check();
   await expect(page).toHaveURL(/gigiena/);
-  await expect(main).toContainText(`Найдено товаров: ${bandages + 1}`);
+  await expect(main.locator("article")).toHaveCount(bandages + 1);
 
   // Reload keeps the state; Back returns to the previous filter set.
   await page.reload();
-  await expect(main).toContainText(`Найдено товаров: ${bandages + 1}`);
+  await expect(main.locator("article")).toHaveCount(bandages + 1);
   await page.goBack();
   await expect(page).not.toHaveURL(/gigiena/);
-  await expect(main).toContainText(`Найдено товаров: ${bandages}`);
+  await expect(main.locator("article")).toHaveCount(bandages);
   await page.goForward();
   await expect(page).toHaveURL(/gigiena/);
 
@@ -77,7 +78,8 @@ test("phone: filters and sort in drawers, Escape closes and returns focus, inval
   const bandages = await classify();
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/catalog?priceMin=abc&sort=drop&page=-5&category=unknown");
-  await expect(page.locator("main")).toContainText("Товаров:");
+  await expect(page.locator("main article").first()).toBeVisible();
+  await expect(page.locator("main")).not.toContainText("Товаров:");
   const open = page.getByRole("button", { name: /^Фильтры/ });
   await open.click();
   const dialog = page.getByRole("dialog");
@@ -89,7 +91,7 @@ test("phone: filters and sort in drawers, Escape closes and returns focus, inval
   await expect(dialog.getByLabel(/Медицинские приборы и изделия/)).toBeChecked();
   await dialog.getByRole("button", { name: "Применить" }).click();
   await expect(page).toHaveURL(/category=medicinskie-pribory-i-izdeliya/);
-  await expect(page.locator("main")).toContainText(`Найдено товаров: ${bandages}`);
+  await expect(page.locator("main article")).toHaveCount(bandages);
   await page.getByRole("button", { name: /^Сортировка/ }).click();
   await expect(page.getByRole("dialog").getByRole("button", { name: /Сначала популярные/ })).toBeDisabled();
   await page.getByRole("dialog").getByRole("button", { name: "По названию (Я–А)" }).click();

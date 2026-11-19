@@ -76,3 +76,44 @@ export const createPharmacy = guarded("settings.manage", async (user, _prev: unk
   await audit(user.id, "pharmacy.create", "Pharmacy", p.id, `Создан филиал ${code} (неактивен до заполнения)`);
   redirect(`/admin/pharmacies/${p.id}`);
 });
+
+const HTTPS_URL = /^https:\/\/[^\s"'<>]{4,1000}$/;
+const MAX_PHOTOS = 8;
+
+/**
+ * Adds a photo of this branch. Only with an explicit confirmation that SALAMAT holds the right to publish it
+ * (who provided it and on what terms are stored with the photo and shown as a credit on the site).
+ */
+export const addPharmacyPhoto = guarded("pharmacies.write", async (user, pharmacyId: string, _prev: unknown, fd: FormData) => {
+  if (!canAccessPharmacy(user, "pharmacies.write", pharmacyId)) throw new AccessDeniedError("Нет доступа к этому филиалу");
+  const pharmacy = await prisma.pharmacy.findUnique({ where: { id: pharmacyId }, select: { code: true } });
+  if (!pharmacy) return fail("Филиал не найден");
+  const url = str(fd, "url");
+  const sourceUrl = optStr(fd, "sourceUrl");
+  const source = str(fd, "source");
+  const license = str(fd, "license");
+  if (!HTTPS_URL.test(url)) return fail("Ссылка на фото должна начинаться с https://", { url: "Нужна ссылка https://" });
+  if (sourceUrl && !HTTPS_URL.test(sourceUrl)) return fail("Ссылка на источник должна начинаться с https://", { sourceUrl: "Нужна ссылка https://" });
+  if (source.length < 2 || source.length > 120) return fail("Укажите, кто предоставил фото", { source: "Обязательное поле" });
+  if (license.length < 2 || license.length > 200) return fail("Укажите условия использования фото", { license: "Обязательное поле" });
+  if (!bool(fd, "rightsConfirmed")) return fail("Фото можно опубликовать только с подтверждённым правом на использование", { rightsConfirmed: "Подтвердите право на публикацию" });
+  const count = await prisma.pharmacyPhoto.count({ where: { pharmacyId } });
+  if (count >= MAX_PHOTOS) return fail(`У филиала уже ${MAX_PHOTOS} фото — удалите лишнее`);
+  await prisma.pharmacyPhoto.create({
+    data: { pharmacyId, url, sourceUrl, source, license, kind: str(fd, "kind") === "INTERIOR" ? "INTERIOR" : "EXTERIOR", rightsConfirmedAt: new Date(), confirmedById: user.id, sortOrder: count },
+  });
+  await audit(user.id, "pharmacy.photo.add", "Pharmacy", pharmacyId, `Фото филиала ${pharmacy.code}: ${source}, ${license}`);
+  revalidatePath(`/admin/pharmacies/${pharmacyId}`);
+  return done("Фото добавлено и показывается на сайте");
+});
+
+export const deletePharmacyPhoto = guarded("pharmacies.write", async (user, photoId: string, _prev: unknown, _fd: FormData) => {
+  void _fd;
+  const photo = await prisma.pharmacyPhoto.findUnique({ where: { id: photoId }, include: { pharmacy: { select: { id: true, code: true } } } });
+  if (!photo) return fail("Фото уже удалено");
+  if (!canAccessPharmacy(user, "pharmacies.write", photo.pharmacyId)) throw new AccessDeniedError("Нет доступа к этому филиалу");
+  await prisma.pharmacyPhoto.delete({ where: { id: photoId } });
+  await audit(user.id, "pharmacy.photo.delete", "Pharmacy", photo.pharmacyId, `Удалено фото филиала ${photo.pharmacy.code}`);
+  revalidatePath(`/admin/pharmacies/${photo.pharmacyId}`);
+  return done("Фото удалено");
+});

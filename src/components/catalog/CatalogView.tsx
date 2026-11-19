@@ -2,7 +2,7 @@ import Link from "next/link";
 import type { CatalogFilters, CategoryNode, Facets, ListResult, SortKey } from "@/server/catalog";
 import type { PharmacyView } from "@/server/pharmacies";
 import type { Dictionary, Locale } from "@/lib/i18n";
-import { fmt, localizedPath } from "@/lib/i18n/config";
+import { localizedPath } from "@/lib/i18n/config";
 import { catalogQuery, hasActiveFilters } from "@/lib/params";
 import { Breadcrumbs, type Crumb } from "../ui/Breadcrumbs";
 import { Pagination } from "../ui/Pagination";
@@ -56,9 +56,6 @@ export function CatalogView({
       <div className="mt-4 flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-[1.75rem] leading-tight font-bold tracking-tight text-ink sm:text-[2.1rem]">{title}</h1>
-          <p className="mt-1 text-sm text-muted" aria-live="polite">
-            {fmt(t.catalog.results, { count: result.total })}
-          </p>
         </div>
       </div>
       {intro}

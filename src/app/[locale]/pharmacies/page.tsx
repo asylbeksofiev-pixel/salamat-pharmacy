@@ -7,26 +7,26 @@ import { env } from "@/server/env";
 import { Breadcrumbs } from "@/components/ui/Breadcrumbs";
 import { Notice, EmptyState } from "@/components/ui/Feedback";
 import { PharmacyCard } from "@/components/catalog/Tiles";
-import { Icon } from "@/components/icons";
 import { PharmacyMap, type MapPharmacy } from "@/components/pharmacy/PharmacyMap";
+import { NearestByAddress, type NearestPharmacy } from "@/components/pharmacy/NearestByAddress";
 
-export async function generateMetadata({ params, searchParams }: PageProps<"/[locale]/pharmacies">) {
+export async function generateMetadata({ params }: PageProps<"/[locale]/pharmacies">) {
   const { locale } = await params;
   if (!isLocale(locale)) return {};
   const t = getDictionary(locale);
-  const sp = await searchParams;
-  return pageMetadata(locale, "/pharmacies", t.meta.pharmaciesTitle, t.meta.pharmaciesDescription, { noindex: !!sp.q });
+  return pageMetadata(locale, "/pharmacies", t.meta.pharmaciesTitle, t.meta.pharmaciesDescription);
 }
 
-export default async function PharmaciesPage({ params, searchParams }: PageProps<"/[locale]/pharmacies">) {
+export default async function PharmaciesPage({ params }: PageProps<"/[locale]/pharmacies">) {
   const { locale } = await params;
   if (!isLocale(locale)) notFound();
   const t = getDictionary(locale);
-  const sp = await searchParams;
-  const q = typeof sp.q === "string" ? sp.q.trim().slice(0, 80) : "";
   const [all, selected] = await Promise.all([getPharmacies(locale), getSelectedPharmacy(locale)]);
-  const needle = q.toLowerCase().replace(/ё/g, "е");
-  const list = needle ? all.filter((p) => `${p.address} ${p.addressRu} ${p.city} ${p.cityRu}`.toLowerCase().replace(/ё/g, "е").includes(needle)) : all;
+  const list = all;
+  // Pharmacies the address search can rank: only those with coordinates (distance is computed from them).
+  const rankable: NearestPharmacy[] = all
+    .filter((p) => p.latitude !== null && p.longitude !== null)
+    .map((p) => ({ id: p.id, address: p.address, city: p.city, phones: p.phones, href: localizedPath(locale, `/pharmacies/${p.slug}`) }));
   const anyCoords = all.some((p) => p.latitude !== null);
   // Same records as the cards below: the map and the list always show the same pharmacies.
   const onMap: MapPharmacy[] = list.flatMap((p) =>
@@ -39,20 +39,16 @@ export default async function PharmaciesPage({ params, searchParams }: PageProps
   return (
     <div className="container-page py-6 md:py-8">
       <Breadcrumbs items={[{ label: t.common.home, href: localizedPath(locale, "/") }, { label: t.common.pharmacies }]} label={t.common.breadcrumbs} baseUrl={env.appUrl} />
-      <div className="mt-4 flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="text-[1.75rem] font-bold tracking-tight sm:text-[2.1rem]">{t.pharmacy.title}</h1>
-          <p className="mt-1 text-muted">{t.pharmacy.intro}</p>
-        </div>
-        <form method="get" className="flex w-full max-w-md gap-2" role="search">
-          <label htmlFor="ph-q" className="sr-only">{t.pharmacy.searchLabel}</label>
-          <div className="relative flex-1">
-            <Icon name="search" size={18} className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-muted" />
-            <input id="ph-q" name="q" type="search" defaultValue={q} maxLength={80} placeholder={t.pharmacy.searchPlaceholder} className="h-12 w-full rounded-[var(--radius-md)] border border-line-strong pr-3 pl-10" />
-          </div>
-          <button type="submit" className="h-12 rounded-[var(--radius-md)] bg-brand-600 px-4 font-semibold text-white hover:bg-brand-700">{t.header.searchSubmit}</button>
-        </form>
+      <div className="mt-4">
+        <h1 className="text-[1.75rem] font-bold tracking-tight sm:text-[2.1rem]">{t.pharmacy.title}</h1>
+        <p className="mt-1 text-muted">{t.pharmacy.intro}</p>
       </div>
+      {/* Nearest pharmacy to a typed address: geocoded on the server, ranked by distance between coordinates. */}
+      {rankable.length ? (
+        <div className="mt-5">
+          <NearestByAddress pharmacies={rankable} />
+        </div>
+      ) : null}
       <p className="mt-4 text-sm text-muted">{fmt(t.pharmacy.count, { count: list.length })}</p>
       <div className="mt-4 flex flex-col gap-3">
         {!anyCoords ? <Notice tone="info" icon="pin">{t.pharmacy.mapUnavailable}</Notice> : null}

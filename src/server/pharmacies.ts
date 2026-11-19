@@ -25,6 +25,16 @@ export interface PharmacyView {
   acceptsOrders: boolean;
   verifiedAt: string | null;
   sourceName: string | null;
+  /** Only photos with a confirmed right to use them (see PharmacyPhoto); empty for most branches. */
+  photos: PharmacyPhotoView[];
+}
+
+export interface PharmacyPhotoView {
+  url: string;
+  kind: "EXTERIOR" | "INTERIOR";
+  source: string;
+  license: string;
+  sourceUrl: string | null;
 }
 
 type Row = Awaited<ReturnType<typeof loadAll>>[number];
@@ -32,7 +42,11 @@ type Row = Awaited<ReturnType<typeof loadAll>>[number];
 async function loadAll() {
   return prisma.pharmacy.findMany({
     where: { isActive: true, city: { isActive: true } },
-    include: { city: true, source: { select: { name: true } } },
+    include: {
+      city: true,
+      source: { select: { name: true } },
+      photos: { orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }], select: { url: true, kind: true, source: true, license: true, sourceUrl: true } },
+    },
     orderBy: [{ sortOrder: "asc" }, { addressRu: "asc" }],
   });
 }
@@ -57,6 +71,8 @@ function toView(p: Row, locale: Locale, now: Date): PharmacyView {
     acceptsOrders: p.acceptsOrders,
     verifiedAt: p.verifiedAt?.toISOString() ?? null,
     sourceName: p.source?.name ?? null,
+    // Exterior first, then interior; https links only.
+    photos: [...p.photos].filter((ph) => /^https:\/\//.test(ph.url)).sort((a, b) => (a.kind === b.kind ? 0 : a.kind === "EXTERIOR" ? -1 : 1)),
   };
 }
 
