@@ -326,7 +326,13 @@ export function OfferActions({
           }}
         />
         {full ? (
-          <Link href={href("/cart")} className={buttonClass("outline", btnSize, "w-full sm:w-auto")}>
+          <Link
+            href={href("/cart")}
+            className={buttonClass("outline", btnSize, "w-full sm:w-auto")}
+            onClick={(e) => {
+              if (Date.now() - addedAt.current < 500) e.preventDefault();
+            }}
+          >
             {t.pdp.goToCart}
             <Icon name="chevronRight" size={18} />
           </Link>

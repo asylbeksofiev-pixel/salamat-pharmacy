@@ -212,7 +212,14 @@ export function PdpCartAction({ id, name, compact = false }: { id: string; name:
           }}
         />
         {compact ? null : (
-          <Link href={href("/cart")} className={buttonClass("secondary", height, "min-w-0 flex-1 gap-1.5 px-3")}>
+          <Link
+            href={href("/cart")}
+            className={buttonClass("secondary", height, "min-w-0 flex-1 gap-1.5 px-3")}
+            // The second tap of a quick double-tap lands here: it must not take the visitor away from the page.
+            onClick={(e) => {
+              if (Date.now() - addedAt.current < 500) e.preventDefault();
+            }}
+          >
             <span className="truncate">{t.pdp.goToCart}</span>
             <Icon name="chevronRight" size={18} className="-mr-1 shrink-0" />
           </Link>

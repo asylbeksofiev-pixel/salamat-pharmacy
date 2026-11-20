@@ -15,7 +15,8 @@ run("npx prisma migrate deploy");
 run("npx tsx prisma/seed.ts");
 run(`npx prisma db execute --url "${url}" --file tests/fixtures/pharmacy_products.sql`);
 run("npx tsx --conditions=react-server scripts/seed-demo.ts");
-if (!existsSync(".next/BUILD_ID")) run("npx next build");
+// The build must run with NODE_ENV=production: with "development" Next.js fails to prerender /_global-error.
+if (!existsSync(".next/BUILD_ID")) execSync("npx next build", { env, stdio: "inherit" });
 const child = spawn("npx", ["next", "start", "-p", port], { env, stdio: "inherit" });
 process.on("SIGTERM", () => child.kill("SIGTERM"));
 process.on("SIGINT", () => child.kill("SIGINT"));
