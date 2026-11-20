@@ -15,6 +15,7 @@ import { pageMetadata } from "@/server/seo";
 import { SearchBox } from "@/components/site/SearchBox";
 import { HeroStats } from "@/components/site/HeroStats";
 import { HomeScrollMotion } from "@/components/site/HomeScrollMotion";
+import { PromoBanner } from "@/components/site/PromoBanner";
 import { CategoryTile, PharmacyCard, PromotionCard } from "@/components/catalog/Tiles";
 import { ProductGrid } from "@/components/catalog/ProductCard";
 import { ButtonLink } from "@/components/ui/Button";
@@ -59,6 +60,7 @@ export default async function HomePage({ params }: PageProps<"/[locale]">) {
 
   return (
     <HomeScrollMotion>
+      <PromoBanner />
       {/* Hero */}
       <section className="relative overflow-hidden border-b border-line bg-gradient-to-b from-brand-50/70 to-white">
         <div className="container-page grid items-center gap-10 py-10 md:py-16 lg:grid-cols-[1.15fr_1fr] lg:py-20">
