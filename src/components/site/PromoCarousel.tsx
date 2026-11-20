@@ -12,7 +12,7 @@ import { cn } from "../ui/cn";
 
 export function PromoCarousel({ children, id }: { children: ReactNode; id: string }) {
   const { t } = useSite();
-  const { ref, state, go, goTo } = useCarousel<HTMLUListElement>();
+  const { ref, state, go, goTo } = useCarousel<HTMLDivElement>();
   const slides = Children.toArray(children).filter(isValidElement) as ReactElement<{ "aria-label"?: string }>[];
   const count = slides.length;
   const multiple = count > 1;
@@ -29,7 +29,7 @@ export function PromoCarousel({ children, id }: { children: ReactNode; id: strin
 
   return (
     <div role="region" aria-roledescription={t.home.carouselRole} aria-label={t.home.promoTitle}>
-      <ul
+      <div
         ref={ref}
         id={id}
         className={cn(
@@ -42,7 +42,7 @@ export function PromoCarousel({ children, id }: { children: ReactNode; id: strin
             "aria-label": fmt(t.home.promoSlide, { index: i + 1, count }),
           }),
         )}
-      </ul>
+      </div>
       {multiple ? (
         <div className="mt-3 flex items-center justify-between gap-3" onKeyDown={onKey}>
           <div role="group" aria-label={t.home.promoDots} className="-ml-2 flex min-w-0 flex-wrap items-center">

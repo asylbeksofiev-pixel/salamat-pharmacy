@@ -118,7 +118,7 @@ npm run db:demo
   `src/components/catalog/OfferActions.tsx`); «−» при 1 убирает товар, и возвращается кнопка «В корзину».
   Корзина по-прежнему в localStorage (`src/lib/client/stores.ts`) и синхронизируется между карточками, страницей
   товара, корзиной и вкладками.
-- Баннеры акций (16 : 9, сейчас два): файлы в `public/promo/`, список в `src/config/promo-banners.ts` — см. `docs/promo-banners.md`.
+- Баннеры акций (16 : 9, сейчас четыре, с текстом и кнопкой): файлы в `public/promo/`, список в `src/config/promo-banners.ts` — см. `docs/promo-banners.md`.
 
 Соответствие 20 обязательным сценариям — в `docs/launch-checklist.md`.
 

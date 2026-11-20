@@ -28,6 +28,14 @@ describe("promotion banners config", () => {
     for (const b of PROMO_BANNERS) {
       for (const locale of locales) expect(b.alt[locale]?.trim(), `${b.id}.alt.${locale}`).toBeTruthy();
       if (b.href) expect(b.href, b.id).toMatch(/^(\/(?!\/)|https:\/\/)/);
+      if (b.caption) {
+        expect(b.href, `${b.id}: a caption needs href for its button`).toBeTruthy();
+        for (const locale of locales) {
+          expect(b.caption.title[locale]?.trim(), `${b.id}.caption.title.${locale}`).toBeTruthy();
+          expect(b.caption.cta[locale]?.trim(), `${b.id}.caption.cta.${locale}`).toBeTruthy();
+          if (b.caption.text) expect(b.caption.text[locale]?.trim(), `${b.id}.caption.text.${locale}`).toBeTruthy();
+        }
+      }
     }
   });
 });

@@ -1,7 +1,7 @@
 // Banners of the "Offers and discounts" carousel on the home page.
 //
 // HOW TO ADD A BANNER (see docs/promo-banners.md):
-//   1. Put the image into  public/promo/  — promo-3.jpg, 1920 × 1080 px (16 : 9), JPG/PNG/WebP.
+//   1. Put the image into  public/promo/  — promo-5.jpg, 1920 × 1080 px (16 : 9), JPG/PNG/WebP.
 //      The frame is 16 : 9 on phones and tablets and 2 : 1 on wide screens (from 1024 px), so about 5 % of the
 //      height is trimmed at the top and bottom there: keep important text and objects away from those edges.
 //      Optionally a separate phone version (`mobile`), also 16 : 9.
@@ -30,6 +30,16 @@ export interface PromoBanner {
    * automatically) or a full https:// address. Leave out for a banner without a link.
    */
   href?: string;
+  /**
+   * Text shown over the empty left part of the picture (below it on phones), with a button to `href`.
+   * Every language is required. Only real, confirmed information: no invented discounts, prices or dates.
+   */
+  caption?: {
+    title: Record<Locale, string>;
+    text?: Record<Locale, string>;
+    /** Button label; the button leads to `href`. */
+    cta: Record<Locale, string>;
+  };
 }
 
 /** Image sizes the banners are prepared for (used for layout and image optimisation). */
@@ -44,11 +54,20 @@ export const PROMO_BANNERS: PromoBanner[] = [
     desktop: "/promo/promo-1.jpg",
     mobile: "/promo/promo-1.jpg",
     alt: {
-      ru: "Аптеки SALAMAT на карте Астаны и аптечные товары",
-      kk: "Астана картасындағы SALAMAT дәріханалары және дәріхана тауарлары",
-      en: "SALAMAT pharmacies on the map of Astana and pharmacy products",
+      ru: "Карта Астаны с отметками аптек и аптечные товары",
+      kk: "Дәріханалар белгіленген Астана картасы және дәріхана тауарлары",
+      en: "A map of Astana with pharmacy pins and pharmacy products",
     },
     href: "/pharmacies",
+    caption: {
+      title: { ru: "Аптеки SALAMAT рядом с вами", kk: "SALAMAT дәріханалары жаныңызда", en: "SALAMAT pharmacies near you" },
+      text: {
+        ru: "Адреса, телефоны и часы работы аптек в Астане — в одном месте.",
+        kk: "Астанадағы дәріханалардың мекенжайлары, телефондары мен жұмыс уақыты — бір жерде.",
+        en: "Addresses, phone numbers and opening hours of pharmacies in Astana in one place.",
+      },
+      cta: { ru: "Найти аптеку", kk: "Дәріхана табу", en: "Find a pharmacy" },
+    },
   },
   {
     id: "promo-2",
@@ -60,12 +79,61 @@ export const PROMO_BANNERS: PromoBanner[] = [
       en: "A green card with a pharmacy cross, coins and a gift",
     },
     href: "/promotions",
+    caption: {
+      title: { ru: "Акции SALAMAT", kk: "SALAMAT акциялары", en: "SALAMAT offers" },
+      text: {
+        ru: "Условия и сроки каждой акции — на странице акций.",
+        kk: "Әр акцияның шарттары мен мерзімдері — акциялар бетінде.",
+        en: "The terms and dates of every offer are on the offers page.",
+      },
+      cta: { ru: "Смотреть акции", kk: "Акцияларды көру", en: "See offers" },
+    },
+  },
+  {
+    id: "promo-3",
+    desktop: "/promo/promo-3.jpg",
+    mobile: "/promo/promo-3.jpg",
+    alt: {
+      ru: "Пакет с аптечным крестом, смартфон с заказом и аптечные товары",
+      kk: "Дәріхана кресі бар пакет, тапсырысы бар смартфон және дәріхана тауарлары",
+      en: "A bag with a pharmacy cross, a smartphone with an order and pharmacy products",
+    },
+    href: "/catalog",
+    caption: {
+      title: { ru: "Закажите на сайте — заберите в аптеке", kk: "Сайттан тапсырыс беріп, дәріханадан алыңыз", en: "Order online, pick up at the pharmacy" },
+      text: {
+        ru: "Добавьте товары в корзину и выберите аптеку — сотрудник позвонит и подтвердит цену и наличие.",
+        kk: "Тауарларды себетке қосып, дәріхананы таңдаңыз — қызметкер хабарласып, бағасы мен бар-жоғын растайды.",
+        en: "Add products to the cart and choose a pharmacy: a pharmacist will call to confirm the price and availability.",
+      },
+      cta: { ru: "Открыть каталог", kk: "Каталогты ашу", en: "Open the catalogue" },
+    },
+  },
+  {
+    id: "promo-4",
+    desktop: "/promo/promo-4.jpg",
+    mobile: "/promo/promo-4.jpg",
+    alt: {
+      ru: "Фармацевт с планшетом и коробки с лекарствами",
+      kk: "Планшеті бар фармацевт және дәрі қораптары",
+      en: "A pharmacist with a tablet and boxes of medicines",
+    },
+    href: "/help",
+    caption: {
+      title: { ru: "Фармацевт подскажет", kk: "Фармацевт кеңес береді", en: "Ask a pharmacist" },
+      text: {
+        ru: "Не нашли нужное? Позвоните в справочную — подскажем, в какой аптеке есть нужный товар.",
+        kk: "Қажетті тауарды таппадыңыз ба? Анықтамалыққа қоңырау шалыңыз — қай дәріханада бар екенін айтамыз.",
+        en: "Can't find what you need? Call the helpline and we will tell you which pharmacy has it.",
+      },
+      cta: { ru: "Вопросы и ответы", kk: "Сұрақтар мен жауаптар", en: "Questions and answers" },
+    },
   },
   // Next banner — uncomment and fill in when the file is in public/promo/:
   // {
-  //   id: "promo-3",
-  //   desktop: "/promo/promo-3.jpg",
-  //   mobile: "/promo/promo-3.jpg",
+  //   id: "promo-5",
+  //   desktop: "/promo/promo-5.jpg",
+  //   mobile: "/promo/promo-5.jpg",
   //   alt: {
   //     ru: "Текст, написанный на баннере",
   //     kk: "Баннерде жазылған мәтін",
