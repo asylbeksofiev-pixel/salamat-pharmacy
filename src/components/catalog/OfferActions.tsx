@@ -41,6 +41,109 @@ export function QuantitySelector({ value, onChange, max, labels, size = "md" }: 
   );
 }
 
+/** Most units of one product in a request (same as the server's default checkout.maxQtyPerLine). */
+export const MAX_QTY = 10;
+
+/**
+ * Compact "− 1 +" control shown once a product is in the cart (cards, product page, cart page).
+ * "+" adds a unit, "−" removes one; with `removeAtOne` the "−" at 1 takes the product out of the cart, and the
+ * caller then shows the original "Add to cart" button again. Limits use aria-disabled (not disabled), so keyboard
+ * focus stays on the button. The number is announced politely and slides in the direction of the change.
+ */
+export function CartStepper({
+  value,
+  max = MAX_QTY,
+  name,
+  onChange,
+  onRemove,
+  size = "md",
+  className,
+}: {
+  value: number;
+  max?: number;
+  /** Product name for the screen-reader labels ("Increase quantity: Paracetamol…"). */
+  name: string;
+  onChange: (n: number) => void;
+  /** When given, "−" at 1 removes the product instead of being unavailable. */
+  onRemove?: () => void;
+  size?: "sm" | "md" | "lg";
+  className?: string;
+}) {
+  const { t } = useSite();
+  // Direction of the last change, derived during render (no effect, no flicker).
+  const [prev, setPrev] = useState(value);
+  const [dir, setDir] = useState<"up" | "down" | null>(null);
+  if (prev !== value) {
+    setDir(value > prev ? "up" : "down");
+    setPrev(value);
+  }
+  const removes = value <= 1 && !!onRemove;
+  const minDisabled = value <= 1 && !onRemove;
+  const maxDisabled = value >= max;
+  const h = size === "sm" ? "h-10" : size === "lg" ? "h-13" : "h-11";
+  const cols = size === "lg" ? "grid-cols-[3.25rem_minmax(2.5rem,1fr)_3.25rem]" : size === "sm" ? "grid-cols-[2.5rem_minmax(2rem,1fr)_2.5rem]" : "grid-cols-[2.75rem_minmax(2.25rem,1fr)_2.75rem]";
+  const btn =
+    "sal-stepper-btn grid h-full touch-manipulation place-items-center text-brand-800 select-none hover:bg-brand-100 focus-visible:relative focus-visible:z-[1] focus-visible:outline-3 focus-visible:-outline-offset-3 focus-visible:outline-brand-600";
+  return (
+    <div role="group" aria-label={`${t.offer.quantity}: ${name}`} className={cn("sal-stepper grid overflow-hidden rounded-[var(--radius-md)] border border-brand-200 bg-brand-50", h, cols, className)}>
+      <button
+        type="button"
+        className={cn(btn, "rounded-l-[calc(var(--radius-md)-1px)]")}
+        aria-label={`${removes ? t.offer.removeFromCart : t.offer.decrease}: ${name}`}
+        aria-disabled={minDisabled || undefined}
+        onClick={() => {
+          if (removes) onRemove!();
+          else if (!minDisabled) onChange(value - 1);
+        }}
+      >
+        <Icon name="minus" size={size === "sm" ? 18 : 20} />
+      </button>
+      <span className="grid min-w-0 place-items-center overflow-hidden text-center font-bold text-brand-800 tabular-nums">
+        <span key={value} data-dir={dir ?? undefined} className={cn("sal-qty block", size === "lg" ? "text-lg" : "text-base")} aria-hidden="true">
+          {value}
+        </span>
+        <span className="sr-only" role="status">
+          {fmt(t.offer.inCartQty, { count: value })}
+        </span>
+      </span>
+      <button
+        type="button"
+        className={cn(btn, "rounded-r-[calc(var(--radius-md)-1px)]")}
+        aria-label={`${t.offer.increase}: ${name}`}
+        data-stepper-plus=""
+        aria-disabled={maxDisabled || undefined}
+        title={maxDisabled ? fmt(t.offer.maxQty, { max }) : undefined}
+        onClick={() => {
+          if (!maxDisabled) onChange(value + 1);
+        }}
+      >
+        <Icon name="plus" size={size === "sm" ? 18 : 20} />
+      </button>
+    </div>
+  );
+}
+
+/**
+ * Focus hand-over when a card action swaps between "Add to cart" and the stepper: after adding, focus moves to
+ * "+" of the stepper; after removing with "−", back to the add button — but only when focus was inside the
+ * control (keyboard and screen-reader users), never stealing it from elsewhere.
+ */
+export function useSwapFocus(inCart: boolean) {
+  const box = useRef<HTMLDivElement>(null);
+  const pending = useRef(false);
+  useEffect(() => {
+    if (!pending.current) return;
+    pending.current = false;
+    const target = box.current?.querySelector<HTMLElement>(inCart ? "[data-stepper-plus]" : "[data-cart-add]") ?? box.current?.querySelector<HTMLElement>("button");
+    target?.focus({ preventScroll: true });
+  }, [inCart]);
+  const mark = () => {
+    const active = document.activeElement;
+    pending.current = !active || active === document.body || !!box.current?.contains(active);
+  };
+  return { box, mark };
+}
+
 /** `quiet`: no toast (the filled heart and aria-pressed confirm it) — used where a toast could cover the price. */
 export function FavoriteButton({ variantId, className, quiet = false }: { variantId: string; className?: string; quiet?: boolean }) {
   const { t, href } = useSite();
@@ -81,59 +184,61 @@ export function FavoriteButton({ variantId, className, quiet = false }: { varian
 /**
  * "Add to cart" for a catalogue product (public.pharmacy_products). The catalogue has no confirmed price or stock
  * per pharmacy, so the line goes into the request "to be confirmed" (seenPriceKzt = null) and the pharmacy
- * confirms both by phone. After adding, the button turns into a link to the cart, and focus follows it.
+ * confirms both by phone. Once added, the button turns into the "− 1 +" stepper; "−" at 1 removes the product
+ * and the button comes back. The cart (localStorage) is the single source: cards, product page, header and cart
+ * page all follow it, also across tabs.
  */
 export function CatalogCartButton({ id, name, size = "md", className }: { id: string; name: string; size?: "md" | "lg"; className?: string }) {
   const { t, href, orderingEnabled } = useSite();
   const toast = useToast();
   const hydrated = useHydrated();
   const cart = useCart();
-  const [added, setAdded] = useState(0);
   const addedAt = useRef(0);
-  const linkRef = useRef<HTMLAnchorElement>(null);
-  const inCart = hydrated && cart.some((l) => l.variantId === id);
-  useEffect(() => {
-    if (added && inCart) linkRef.current?.focus({ preventScroll: true });
-  }, [added, inCart]);
+  const line = hydrated ? cart.find((l) => l.variantId === id) : undefined;
+  const { box, mark } = useSwapFocus(!!line);
   if (!orderingEnabled) return null;
   // Long labels (Kazakh, English) wrap to a second line instead of being cut; the icon gives way on narrow cards.
   const cls = cn("w-full gap-1.5 px-2.5", size === "md" && "text-sm sm:text-[0.95rem]", className);
-  if (inCart) {
-    return (
-      <Link
-        ref={linkRef}
-        href={href("/cart")}
-        className={buttonClass("secondary", size, cls, true)}
-        // The second tap of a quick double-tap lands here: it must not take the visitor away from the page.
-        onClick={(e) => {
-          if (Date.now() - addedAt.current < 500) e.preventDefault();
-        }}
-      >
-        <span key={added} className={cn("grid shrink-0 place-items-center", added > 0 && "sal-cart-pop")}>
-          <Icon name="check" size={18} />
-        </span>
-        <span className="min-w-0 text-center">{t.offer.inCart}</span>
-      </Link>
-    );
-  }
   return (
-    <Button
-      size={size}
-      wrap
-      className={cls}
-      onClick={(e) => {
-        // A quick second tap (before the button turns into "In cart") must not add a second unit.
-        if (cartStore.get().some((l) => l.variantId === id)) return;
-        flyToCart(e.currentTarget);
-        addedAt.current = Date.now();
-        cartStore.add({ variantId: id, name, seenPriceKzt: null });
-        setAdded((n) => n + 1);
-        toast(t.request.added, "success", { label: t.common.cart, href: href("/cart") });
-      }}
-    >
-      <Icon name="cart" size={18} className="shrink-0 max-[399px]:hidden" />
-      <span className="min-w-0 text-center">{t.offer.addToCart}</span>
-    </Button>
+    <div ref={box}>
+      {line ? (
+        <CartStepper
+          value={line.quantity}
+          name={name}
+          size={size}
+          className={className}
+          // The second tap of a quick double-tap lands on the stepper: it must not add a second unit.
+          onChange={(n) => {
+            if (Date.now() - addedAt.current > 400) cartStore.setQuantity(id, n);
+          }}
+          onRemove={() => {
+            if (Date.now() - addedAt.current < 400) return;
+            mark();
+            cartStore.remove(id);
+            toast(t.request.removed, "info");
+          }}
+        />
+      ) : (
+        <Button
+          size={size}
+          wrap
+          data-cart-add=""
+          className={cls}
+          onClick={(e) => {
+            // A quick second tap (before the button turns into the stepper) must not add a second unit.
+            if (cartStore.get().some((l) => l.variantId === id)) return;
+            mark();
+            flyToCart(e.currentTarget);
+            addedAt.current = Date.now();
+            cartStore.add({ variantId: id, name, seenPriceKzt: null });
+            toast(t.request.added, "success", { label: t.common.cart, href: href("/cart") });
+          }}
+        >
+          <Icon name="cart" size={18} className="shrink-0 max-[399px]:hidden" />
+          <span className="min-w-0 text-center">{t.offer.addToCart}</span>
+        </Button>
+      )}
+    </div>
   );
 }
 
@@ -162,6 +267,7 @@ export function OfferActions({
   const [qty, setQty] = useState(1);
   const addedAt = useRef(0);
   const inCart = hydrated ? cart.find((l) => l.variantId === variantId) : undefined;
+  const { box, mark } = useSwapFocus(!!inCart);
   const full = layout === "page";
   const btnSize = full ? "lg" : "md";
   const width = full ? "w-full sm:w-auto sm:min-w-56" : "w-full";
@@ -200,25 +306,30 @@ export function OfferActions({
     );
   }
   if (inCart) {
+    const max = offer.action === "add" && offer.quantity !== null ? Math.max(1, Math.min(MAX_QTY, offer.quantity)) : MAX_QTY;
     return (
-      <div className={cn("flex items-center gap-2", full ? "flex-wrap" : "")}>
-        <Link
-          href={href("/cart")}
-          className={buttonClass("secondary", btnSize, full ? "sm:min-w-44" : "flex-1")}
-          onClick={(e) => {
-            if (Date.now() - addedAt.current < 500) e.preventDefault();
+      <div ref={box} className={cn("flex items-center gap-2", full ? "flex-wrap" : "")}>
+        <CartStepper
+          value={inCart.quantity}
+          max={Math.max(max, Math.min(MAX_QTY, inCart.quantity))}
+          name={fullName}
+          size={btnSize}
+          className={full ? "w-full sm:w-44" : "w-full"}
+          onChange={(n) => {
+            if (Date.now() - addedAt.current > 400) cartStore.setQuantity(variantId, n);
           }}
-        >
-          <Icon name="check" size={18} />
-          {t.offer.inCart}
-        </Link>
+          onRemove={() => {
+            if (Date.now() - addedAt.current < 400) return;
+            mark();
+            cartStore.remove(variantId);
+            toast(t.request.removed, "info");
+          }}
+        />
         {full ? (
-          <QuantitySelector
-            value={inCart.quantity}
-            max={10}
-            onChange={(n) => cartStore.setQuantity(variantId, n)}
-            labels={{ quantity: t.offer.quantity, decrease: t.offer.decrease, increase: t.offer.increase }}
-          />
+          <Link href={href("/cart")} className={buttonClass("outline", btnSize, "w-full sm:w-auto")}>
+            {t.pdp.goToCart}
+            <Icon name="chevronRight" size={18} />
+          </Link>
         ) : null}
       </div>
     );
@@ -227,6 +338,7 @@ export function OfferActions({
   const add = (seenPrice: number | null, message: string, from: Element | null) => {
     // A quick second tap (before the button turns into "In cart") must not add the quantity twice.
     if (cartStore.get().some((l) => l.variantId === variantId)) return;
+    mark();
     flyToCart(from);
     addedAt.current = Date.now();
     cartStore.add({ variantId, name: fullName, seenPriceKzt: seenPrice }, full ? qty : 1);
@@ -235,11 +347,11 @@ export function OfferActions({
 
   if (offer.action === "add") {
     return (
-      <div className={cn("flex items-center gap-2", full ? "flex-wrap" : "")}>
+      <div ref={box} className={cn("flex items-center gap-2", full ? "flex-wrap" : "")}>
         {full ? (
           <QuantitySelector value={qty} max={offer.quantity !== null ? Math.max(1, Math.min(10, offer.quantity)) : 10} onChange={setQty} labels={{ quantity: t.offer.quantity, decrease: t.offer.decrease, increase: t.offer.increase }} />
         ) : null}
-        <Button size={btnSize} icon="cart" className={full ? "sm:min-w-52" : "w-full"} onClick={(e) => add(offer.priceKzt, t.offer.added, e.currentTarget)}>
+        <Button size={btnSize} icon="cart" data-cart-add="" className={full ? "sm:min-w-52" : "w-full"} onClick={(e) => add(offer.priceKzt, t.offer.added, e.currentTarget)}>
           {t.offer.addToCart}
         </Button>
       </div>
@@ -248,8 +360,8 @@ export function OfferActions({
 
   // "ask": price or stock unknown/stale — the item goes into the request and the operator confirms.
   return (
-    <>
-      <Button variant="outline" size={btnSize} icon="question" className={width} onClick={() => setAskOpen(true)}>
+    <div ref={box}>
+      <Button variant="outline" size={btnSize} icon="question" data-cart-add="" className={width} onClick={() => setAskOpen(true)}>
         {t.offer.ask}
       </Button>
       <Modal
@@ -276,6 +388,6 @@ export function OfferActions({
         <p className="font-semibold text-ink">{fullName}</p>
         <p className="mt-2 text-ink-soft">{fmt(t.offer.askText, { pharmacy: pharmacy?.address ?? "" })}</p>
       </Modal>
-    </>
+    </div>
   );
 }

@@ -24,7 +24,7 @@ export function geocoderProvider(): "2gis" | "nominatim" | "off" {
   return "nominatim";
 }
 
-function inArea(lat: number, lng: number): boolean {
+export function inArea(lat: number, lng: number): boolean {
   return lat >= AREA.south && lat <= AREA.north && lng >= AREA.west && lng <= AREA.east;
 }
 
@@ -128,4 +128,65 @@ export async function geocodeAddress(raw: string, lang: "ru" | "kk" | "en"): Pro
   }
   cacheSet(key, result);
   return result;
+}
+
+export interface AddressSuggestion {
+  /** Address as shown in the list (street and building, with the settlement when it is not Astana). */
+  label: string;
+  /** Coordinates when the provider returned them: then no second geocoding request is needed. */
+  point: { lat: number; lng: number } | null;
+}
+
+/**
+ * Address suggestions while typing. Only 2GIS offers them (Suggest API, same server-side key); the public
+ * Nominatim service forbids autocomplete in its usage policy, so without a 2GIS key there are no suggestions
+ * and the visitor simply presses "Search". Results outside Astana and its suburbs are dropped.
+ */
+export function suggestionsAvailable(): boolean {
+  return geocoderProvider() === "2gis";
+}
+
+const suggestCache = new Map<string, { at: number; value: AddressSuggestion[] }>();
+
+export async function suggestAddresses(raw: string, lang: "ru" | "kk" | "en"): Promise<AddressSuggestion[]> {
+  if (!suggestionsAvailable()) throw new GeocoderUnavailableError("suggest_off");
+  const query = raw.replace(/\s+/g, " ").trim().slice(0, 120);
+  const key = `${lang}:${query.toLowerCase()}`;
+  const hit = suggestCache.get(key);
+  if (hit && Date.now() - hit.at < CACHE_TTL_MS) return hit.value;
+  const params = new URLSearchParams({
+    q: query,
+    suggest_type: "address",
+    location: `${CENTER.lng},${CENTER.lat}`,
+    fields: "items.point,items.full_address_name",
+    page_size: "6",
+    locale: lang === "kk" ? "kk_KZ" : lang === "en" ? "en_KZ" : "ru_KZ",
+    key: env.geocoder.twoGisKey,
+  });
+  let data: {
+    meta?: { code?: number };
+    result?: { items?: { point?: { lat?: number; lon?: number }; full_name?: string; address_name?: string; full_address_name?: string; name?: string }[] };
+  };
+  try {
+    data = (await fetchJson(`https://catalog.api.2gis.com/3.0/suggests?${params}`)) as typeof data;
+  } catch (e) {
+    if (e instanceof GeocoderUnavailableError) throw e;
+    throw new GeocoderUnavailableError((e as Error).name);
+  }
+  if (data.meta?.code && data.meta.code !== 200 && data.meta.code !== 404) throw new GeocoderUnavailableError(`2gis ${data.meta.code}`);
+  const seen = new Set<string>();
+  const out: AddressSuggestion[] = [];
+  for (const it of data.result?.items ?? []) {
+    const label = (it.full_address_name || it.full_name || it.address_name || it.name || "").trim();
+    if (!label || seen.has(label.toLowerCase())) continue;
+    const lat = it.point?.lat;
+    const lng = it.point?.lon;
+    const point = typeof lat === "number" && typeof lng === "number" ? { lat, lng } : null;
+    if (point && !inArea(point.lat, point.lng)) continue;
+    seen.add(label.toLowerCase());
+    out.push({ label: label.slice(0, 160), point });
+  }
+  if (suggestCache.size >= CACHE_MAX) suggestCache.delete(suggestCache.keys().next().value!);
+  suggestCache.set(key, { at: Date.now(), value: out });
+  return out;
 }

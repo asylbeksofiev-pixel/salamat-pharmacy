@@ -13,7 +13,7 @@ import { Modal } from "../ui/Dialog";
 import { useToast } from "../ui/Toast";
 import { Icon } from "../icons";
 import { cn } from "../ui/cn";
-import { QuantitySelector } from "./OfferActions";
+import { CartStepper, MAX_QTY, useSwapFocus } from "./OfferActions";
 import { PHOTO_FAILED_EVENT } from "./ProductPhoto";
 
 /** "Back": returns to the previous page of this site (keeps search, filters, scroll), otherwise to the catalogue. */
@@ -166,11 +166,10 @@ export function ArticleCopy({ article, label }: { article: string; label: string
 }
 
 const MAX_LINES = 30;
-const MAX_QTY = 10;
 
 /**
- * Main action for a catalogue product. States: ready, pressed (CSS), added (check + toast + flying dot),
- * in cart (quantity −/+ and a link to the cart), error (cart limit or storage failure), unavailable (requests
+ * Main action for a catalogue product. States: ready, pressed (CSS), added (flying dot, inline note or toast),
+ * in cart ("− n +" stepper and a link to the cart), error (cart limit or storage failure), unavailable (requests
  * switched off on the site). There is no network request here, so there is no loading state.
  * A quick second tap never adds a second unit; the first tap after "added" cannot navigate away.
  */
@@ -179,10 +178,10 @@ export function PdpCartAction({ id, name, compact = false }: { id: string; name:
   const toast = useToast();
   const hydrated = useHydrated();
   const cart = useCart();
-  const [added, setAdded] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const addedAt = useRef(0);
   const line = hydrated ? cart.find((l) => l.variantId === id) : undefined;
+  const { box, mark } = useSwapFocus(!!line);
   const height = compact ? "md" : "lg";
 
   if (!orderingEnabled) {
@@ -193,39 +192,40 @@ export function PdpCartAction({ id, name, compact = false }: { id: string; name:
     );
   }
   if (line) {
+    // In the cart: "− n +" (the "−" at 1 takes the product out and brings the button back) and the way to the cart.
     return (
-      <div className={cn("flex items-stretch gap-2", compact && "gap-1.5")}>
-        {compact ? null : (
-          <QuantitySelector
-            value={line.quantity}
-            max={MAX_QTY}
-            onChange={(n) => cartStore.setQuantity(id, n)}
-            labels={{ quantity: t.offer.quantity, decrease: t.offer.decrease, increase: t.offer.increase }}
-            size="lg"
-          />
-        )}
-        <Link
-          href={href("/cart")}
-          aria-label={`${t.offer.inCart}. ${t.pdp.goToCart}`}
-          className={buttonClass("secondary", height, "min-w-0 flex-1 gap-1.5 px-3", compact)}
-          onClick={(e) => {
-            if (Date.now() - addedAt.current < 500) e.preventDefault();
+      <div ref={box} className={cn("flex items-stretch gap-2", compact && "gap-1.5")}>
+        <CartStepper
+          value={line.quantity}
+          max={MAX_QTY}
+          name={name}
+          size={height}
+          className={compact ? "w-full" : "w-40 shrink-0 sm:w-44"}
+          onChange={(n) => {
+            if (Date.now() - addedAt.current > 400) cartStore.setQuantity(id, n);
           }}
-        >
-          <span key={added} className={cn("grid shrink-0 place-items-center", added > 0 && "sal-cart-pop")}>
-            <Icon name="check" size={20} />
-          </span>
-          <span className={compact ? "min-w-0 text-center" : "truncate"}>{t.offer.inCart}</span>
-          <Icon name="chevronRight" size={18} className="-mr-1 shrink-0" />
-        </Link>
+          onRemove={() => {
+            if (Date.now() - addedAt.current < 400) return;
+            mark();
+            cartStore.remove(id);
+            toast(t.request.removed, "info");
+          }}
+        />
+        {compact ? null : (
+          <Link href={href("/cart")} className={buttonClass("secondary", height, "min-w-0 flex-1 gap-1.5 px-3")}>
+            <span className="truncate">{t.pdp.goToCart}</span>
+            <Icon name="chevronRight" size={18} className="-mr-1 shrink-0" />
+          </Link>
+        )}
       </div>
     );
   }
   return (
-    <div>
+    <div ref={box}>
       <Button
         size={height}
         wrap={compact}
+        data-cart-add=""
         className={cn("w-full gap-2 px-4", compact && "gap-1.5 px-3")}
         onClick={(e) => {
           if (cartStore.get().some((l) => l.variantId === id)) return;
@@ -233,6 +233,7 @@ export function PdpCartAction({ id, name, compact = false }: { id: string; name:
             setError(fmt(t.cart.tooManyItems, { max: MAX_LINES }));
             return;
           }
+          mark();
           flyToCart(e.currentTarget);
           addedAt.current = Date.now();
           cartStore.add({ variantId: id, name, seenPriceKzt: null });
@@ -241,7 +242,6 @@ export function PdpCartAction({ id, name, compact = false }: { id: string; name:
             return;
           }
           setError(null);
-          setAdded((n) => n + 1);
           // From the sticky bar the page content is out of sight: a toast (placed above the bar) confirms it.
           // The main action confirms inline (see PdpAddedNote), so nothing covers the name, price or buttons.
           if (compact) toast(t.request.added, "success", { label: t.common.cart, href: href("/cart") });

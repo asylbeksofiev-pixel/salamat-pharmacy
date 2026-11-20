@@ -10,11 +10,12 @@ import { Button, ButtonLink } from "../ui/Button";
 import { EmptyState, ErrorState, Notice, Skeleton } from "../ui/Feedback";
 import { Icon } from "../icons";
 import { AvailabilityBadge } from "../catalog/Offer";
-import { QuantitySelector } from "../catalog/OfferActions";
+import { CartStepper, MAX_QTY } from "../catalog/OfferActions";
 import { ProductImage } from "../catalog/ProductImage";
 import { useQuote, type ChangeNote } from "./useQuote";
 import type { Quote, QuoteLine } from "@/server/orders/quote";
 import { useToast } from "../ui/Toast";
+import { cn } from "../ui/cn";
 
 export function noteText(n: ChangeNote, t: Dictionary, locale: Locale): string {
   if (n.kind === "removed") return t.cart.removedFromCatalog;
@@ -76,7 +77,7 @@ export function CartView() {
   if (!lines.length) {
     return (
       <div className="container-page py-6 md:py-10">
-        <h1 className="text-[1.75rem] leading-tight font-bold tracking-tight sm:text-[2.25rem]">{t.cart.title}</h1>
+        <h1 id="cart-title" tabIndex={-1} className="text-[1.75rem] leading-tight font-bold tracking-tight outline-none sm:text-[2.25rem]">{t.cart.title}</h1>
         <EmptyState
           className="mt-6"
           icon="cart"
@@ -103,7 +104,7 @@ export function CartView() {
   return (
     <div className="container-page py-6 md:py-10">
       <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-2">
-        <h1 className="text-[1.75rem] leading-tight font-bold tracking-tight sm:text-[2.25rem]">
+        <h1 id="cart-title" tabIndex={-1} className="text-[1.75rem] leading-tight font-bold tracking-tight outline-none sm:text-[2.25rem]">
           {t.cart.title} <span className="align-middle text-lg font-semibold text-muted tabular-nums">{lines.length}</span>
         </h1>
         <button type="button" onClick={() => cartStore.clear()} className="inline-flex h-11 items-center gap-1.5 rounded-[var(--radius-md)] px-2 text-sm font-semibold text-muted hover:bg-accent-50 hover:text-accent-600">
@@ -170,16 +171,25 @@ export function CartView() {
                     ) : null}
                   </div>
                   <div className="col-start-2 flex flex-wrap items-center justify-between gap-3 sm:col-start-auto sm:row-span-1 sm:flex-col sm:items-end sm:justify-start">
-                    {q ? <LinePrice line={q} t={t} locale={locale} /> : null}
-                    <div className="flex items-center gap-1">
-                      <QuantitySelector size="sm" value={l.quantity} max={quote?.limits.maxQtyPerLine ?? 10} onChange={(n) => cartStore.setQuantity(l.variantId, n)} labels={{ quantity: t.offer.quantity, decrease: t.offer.decrease, increase: t.offer.increase }} />
+                    {q ? (
+                      <div className={cn("transition-opacity duration-200", loading && q.quantity !== l.quantity && "opacity-50")} aria-busy={(loading && q.quantity !== l.quantity) || undefined}>
+                        <LinePrice line={q} t={t} locale={locale} />
+                      </div>
+                    ) : null}
+                    <div className="flex items-center gap-1.5">
+                      <CartStepper size="sm" className="w-[8.5rem]" value={l.quantity} max={quote?.limits.maxQtyPerLine ?? MAX_QTY} name={name} onChange={(n) => cartStore.setQuantity(l.variantId, n)} />
                       <button
                         type="button"
-                        onClick={() => {
+                        onClick={(e) => {
+                          // Keep keyboard focus in the list: the next line's remove button, else the title.
+                          const li = e.currentTarget.closest("li");
+                          const next = (li?.nextElementSibling ?? li?.previousElementSibling)?.querySelector<HTMLElement>("[data-remove-line]");
                           cartStore.remove(l.variantId);
                           toast(t.request.removed, "info");
+                          requestAnimationFrame(() => (next?.isConnected ? next : document.getElementById("cart-title"))?.focus({ preventScroll: true }));
                         }}
-                        className="grid size-11 place-items-center rounded-[var(--radius-md)] text-muted transition-colors hover:bg-accent-50 hover:text-accent-600"
+                        data-remove-line=""
+                        className="grid size-11 touch-manipulation place-items-center rounded-[var(--radius-md)] text-muted transition-[color,background-color,scale] duration-150 hover:bg-accent-50 hover:text-accent-600 motion-safe:active:scale-90"
                         aria-label={`${t.common.remove}: ${name}`}
                       >
                         <Icon name="trash" size={18} />
@@ -202,7 +212,7 @@ export function CartView() {
             <p className="mt-4 mb-2 text-sm font-semibold text-ink">{t.cart.pharmacy}</p>
             <PharmacyChip compact />
             {!pharmacy ? <p className="mt-2 text-sm text-warn-700">{t.request.choosePharmacy}</p> : null}
-            <div className="mt-5 border-t border-line pt-4" aria-live="polite">
+            <div className={cn("mt-5 border-t border-line pt-4 transition-opacity duration-200", loading && quote && "opacity-60")} aria-live="polite" aria-busy={loading || undefined}>
               {loading && !quote ? <p className="text-sm text-muted">{t.cart.checking}</p> : quote ? <QuoteTotals quote={quote} t={t} locale={locale} /> : null}
             </div>
             {canCheckout ? (

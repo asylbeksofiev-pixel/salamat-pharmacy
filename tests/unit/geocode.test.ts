@@ -54,4 +54,39 @@ describe("address geocoding for the nearest pharmacy", () => {
     mod = await load({ TWOGIS_API_KEY: "", GEOCODER: "off" });
     await expect(mod.geocodeAddress("Сарайшык 7", "ru")).rejects.toBeInstanceOf(mod.GeocoderUnavailableError);
   });
+
+  it("offers address suggestions only with a 2GIS key (Nominatim forbids autocomplete)", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const mod = await load({ TWOGIS_API_KEY: "", GEOCODER: "" });
+    expect(mod.suggestionsAvailable()).toBe(false);
+    await expect(mod.suggestAddresses("Кенесары", "ru")).rejects.toBeInstanceOf(mod.GeocoderUnavailableError);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("2GIS suggestions: address type, coordinates kept, results outside Astana and duplicates dropped", async () => {
+    const fetchMock = respond({
+      meta: { code: 200 },
+      result: {
+        items: [
+          { full_address_name: "Астана, Кенесары, 40", point: { lat: 51.1656, lon: 71.433 } },
+          { full_address_name: "Астана, Кенесары, 40", point: { lat: 51.1656, lon: 71.433 } },
+          { full_address_name: "Алматы, Кенесары, 40", point: { lat: 43.25, lon: 76.9 } },
+          { address_name: "Кенесары, 42" },
+        ],
+      },
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { suggestAddresses, suggestionsAvailable } = await load({ TWOGIS_API_KEY: "test-key-123", GEOCODER: "" });
+    expect(suggestionsAvailable()).toBe(true);
+    const items = await suggestAddresses("Кенесары 4", "ru");
+    expect(items).toEqual([
+      { label: "Астана, Кенесары, 40", point: { lat: 51.1656, lng: 71.433 } },
+      { label: "Кенесары, 42", point: null },
+    ]);
+    expect(JSON.stringify(items)).not.toContain("test-key-123");
+    const url = String((fetchMock.mock.calls[0] as unknown[])[0]);
+    expect(url).toContain("catalog.api.2gis.com/3.0/suggests");
+    expect(url).toContain("suggest_type=address");
+  });
 });

@@ -20,6 +20,8 @@ import { ProductGrid } from "@/components/catalog/ProductCard";
 import { CatalogItemCard } from "@/components/catalog/CatalogItems";
 import { CAROUSEL_ITEM, ProductCarousel } from "@/components/catalog/ProductCarousel";
 import { ButtonLink } from "@/components/ui/Button";
+import { PromoBanners } from "@/components/site/PromoBanners";
+import { PROMO_BANNERS } from "@/config/promo-banners";
 import { Icon } from "@/components/icons";
 
 export async function generateMetadata({ params }: PageProps<"/[locale]">) {
@@ -127,6 +129,24 @@ export default async function HomePage({ params }: PageProps<"/[locale]">) {
         </div>
       </section>
 
+      {/* Offers and discounts: banners from src/config/promo-banners.ts (public/promo/); a neutral placeholder until
+          the real banners are added. */}
+      <section aria-labelledby="h-offers" className="container-page pt-10 md:pt-14">
+        <SectionTitle
+          id="h-offers"
+          title={t.home.promoTitle}
+          action={
+            <Link href={href("/promotions")} className="inline-flex min-h-11 shrink-0 items-center gap-1 text-sm font-semibold text-brand-700 hover:underline">
+              {t.common.showAll}
+              <Icon name="chevronRight" size={16} />
+            </Link>
+          }
+        />
+        <div data-home-reveal>
+          <PromoBanners banners={PROMO_BANNERS} t={t} locale={locale} />
+        </div>
+      </section>
+
       {/* Catalogue: a few real products (stable order, not "popular") and the way into the full catalogue. */}
       <section aria-labelledby="h-cat" className="container-page py-12 md:py-16">
         <div data-home-reveal className="mb-6 flex flex-col gap-5 md:mb-8 md:flex-row md:items-end md:justify-between md:gap-10">
@@ -144,11 +164,12 @@ export default async function HomePage({ params }: PageProps<"/[locale]">) {
         {preview.length ? (
           <div data-home-reveal>
             <ProductCarousel
+              id="home-products"
               label={t.home.carouselLabel}
               prevLabel={t.home.carouselPrev}
               nextLabel={t.home.carouselNext}
               action={
-                <ButtonLink href={href("/catalog")} size="lg" iconRight="chevronRight" className="w-full sm:w-auto sm:min-w-64">
+                <ButtonLink href={href("/catalog")} size="lg" iconRight="chevronRight" wrap className="w-full sm:w-auto sm:min-w-64">
                   {t.request.viewAll}
                 </ButtonLink>
               }

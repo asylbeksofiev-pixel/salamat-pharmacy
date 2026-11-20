@@ -381,6 +381,28 @@ dialog.sal-drawer-bottom[data-closing] {
 .sal-carousel > li > * {
   flex: 1;
 }
+/* Mouse drag (lib/client/carousel.ts): free movement while dragging, snapping again on release. */
+.sal-carousel,
+.sal-promo-track {
+  cursor: grab;
+}
+@media (hover: none), (pointer: coarse) {
+  .sal-carousel,
+  .sal-promo-track {
+    cursor: auto;
+  }
+}
+.sal-carousel[data-dragging],
+.sal-promo-track[data-dragging] {
+  scroll-snap-type: none;
+  scroll-behavior: auto;
+  cursor: grabbing;
+  user-select: none;
+}
+.sal-carousel[data-dragging] a,
+.sal-promo-track[data-dragging] a {
+  pointer-events: none;
+}
 .sal-carousel-btn {
   transition:
     background-color 180ms var(--ease-out-soft),
@@ -417,6 +439,59 @@ dialog.sal-drawer-bottom[data-closing] {
   }
   .sal-carousel[data-overflow]:not([data-at-start]):not([data-at-end]) {
     mask-image: linear-gradient(to right, transparent, #000 3.5rem, #000 calc(100% - 3.5rem), transparent);
+  }
+}
+
+/* Promotion banners (PromoCarousel.tsx): one banner per view, native swipe with snap, no visible scrollbar. */
+.sal-promo-track {
+  scrollbar-width: none;
+}
+.sal-promo-track::-webkit-scrollbar {
+  display: none;
+}
+.sal-promo-dot {
+  transition: width 240ms var(--ease-out-soft), background-color 200ms var(--ease-out-soft);
+}
+
+/* Quantity stepper on cards, the product page and in the cart (CartStepper in OfferActions.tsx).
+   It replaces the "Add to cart" button with a short scale-in; the number slides in the direction of change. */
+.sal-stepper {
+  animation: 180ms var(--ease-out-soft) backwards sal-stepper-in;
+}
+.sal-stepper-btn {
+  transition: background-color 160ms var(--ease-out-soft), color 160ms var(--ease-out-soft), scale 140ms var(--ease-out-soft);
+}
+.sal-stepper-btn[aria-disabled="true"] {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .sal-stepper-btn:active:not([aria-disabled="true"]) {
+    scale: 0.9;
+  }
+  .sal-qty[data-dir="up"] {
+    animation: 200ms var(--ease-out-soft) both sal-qty-up;
+  }
+  .sal-qty[data-dir="down"] {
+    animation: 200ms var(--ease-out-soft) both sal-qty-down;
+  }
+}
+@keyframes sal-stepper-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+}
+@keyframes sal-qty-up {
+  from {
+    opacity: 0;
+    transform: translateY(45%);
+  }
+}
+@keyframes sal-qty-down {
+  from {
+    opacity: 0;
+    transform: translateY(-45%);
   }
 }
 

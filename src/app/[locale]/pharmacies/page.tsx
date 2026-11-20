@@ -4,6 +4,7 @@ import { fmt } from "@/lib/i18n/config";
 import { getPharmacies, getSelectedPharmacy, routeLinks } from "@/server/pharmacies";
 import { pageMetadata } from "@/server/seo";
 import { env } from "@/server/env";
+import { geocoderProvider, suggestionsAvailable } from "@/server/geocode";
 import { Breadcrumbs } from "@/components/ui/Breadcrumbs";
 import { Notice, EmptyState } from "@/components/ui/Feedback";
 import { PharmacyCard } from "@/components/catalog/Tiles";
@@ -24,9 +25,11 @@ export default async function PharmaciesPage({ params }: PageProps<"/[locale]/ph
   const [all, selected] = await Promise.all([getPharmacies(locale), getSelectedPharmacy(locale)]);
   const list = all;
   // Pharmacies the address search can rank: only those with coordinates (distance is computed from them).
-  const rankable: NearestPharmacy[] = all
-    .filter((p) => p.latitude !== null && p.longitude !== null)
-    .map((p) => ({ id: p.id, address: p.address, city: p.city, phones: p.phones, href: localizedPath(locale, `/pharmacies/${p.slug}`) }));
+  const rankable: NearestPharmacy[] = all.flatMap((p) =>
+    p.latitude !== null && p.longitude !== null
+      ? [{ id: p.id, address: p.address, city: p.city, phones: p.phones, href: localizedPath(locale, `/pharmacies/${p.slug}`), lat: p.latitude, lng: p.longitude }]
+      : [],
+  );
   const anyCoords = all.some((p) => p.latitude !== null);
   // Same records as the cards below: the map and the list always show the same pharmacies.
   const onMap: MapPharmacy[] = list.flatMap((p) =>
@@ -43,10 +46,11 @@ export default async function PharmaciesPage({ params }: PageProps<"/[locale]/ph
         <h1 className="text-[1.75rem] font-bold tracking-tight sm:text-[2.1rem]">{t.pharmacy.title}</h1>
         <p className="mt-1 text-muted">{t.pharmacy.intro}</p>
       </div>
-      {/* Nearest pharmacy to a typed address: geocoded on the server, ranked by distance between coordinates. */}
-      {rankable.length ? (
+      {/* Nearest pharmacy to a typed address: geocoded on the server, ranked by distance between coordinates.
+          Without coordinates or with the geocoder off the block explains why instead of guessing. */}
+      {all.length ? (
         <div className="mt-5">
-          <NearestByAddress pharmacies={rankable} />
+          <NearestByAddress pharmacies={rankable} provider={geocoderProvider()} suggestions={suggestionsAvailable()} missingCoords={all.length - rankable.length} />
         </div>
       ) : null}
       <p className="mt-4 text-sm text-muted">{fmt(t.pharmacy.count, { count: list.length })}</p>

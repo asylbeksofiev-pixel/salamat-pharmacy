@@ -38,8 +38,8 @@ describe("translations", () => {
     for (const letter of ["ә", "ғ", "қ", "ң", "ө", "ұ", "ү", "і"]) expect(all.includes(letter), letter).toBe(true);
   });
   it("Kazakh UI is actually translated (not copied from Russian)", () => {
-    // Identical on purpose: "Бонус" is the same word in Kazakh; the phone mask is not text.
-    const allowed = new Set(["offer.bonus", "checkout.phonePlaceholder"]);
+    // Identical on purpose: "Бонус" is the same word in Kazakh; the phone mask is not text; a service name is a name.
+    const allowed = new Set(["offer.bonus", "checkout.phonePlaceholder", "pharmacy.serviceOsm"]);
     const same = Object.keys(fr).filter((k) => fr[k] === fk[k] && fr[k].length > 12 && !allowed.has(k));
     expect(same, same.join(", ")).toEqual([]);
   });

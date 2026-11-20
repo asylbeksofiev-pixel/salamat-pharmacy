@@ -1,20 +1,23 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/server/db";
-import { geocodeAddress, geocoderProvider, GeocoderUnavailableError } from "@/server/geocode";
+import { geocodeAddress, geocoderProvider, GeocoderUnavailableError, inArea, type GeoPoint } from "@/server/geocode";
 import { memoryRateLimit } from "@/server/rate-limit";
 import { clientIpFrom, hashIdentifier, isSameOrigin } from "@/server/request";
 import { distanceKm } from "@/lib/geo";
 
 const body = z.object({
-  address: z.string().trim().min(3).max(120),
+  address: z.string().trim().min(3).max(160),
   locale: z.enum(["ru", "kk", "en"]).default("ru"),
+  /** Coordinates of an address suggestion the visitor picked (from /api/pharmacy/address-suggest). */
+  point: z.object({ lat: z.number().finite(), lng: z.number().finite() }).optional(),
 });
 
 /**
  * Nearest pharmacies to an address typed by the visitor. The address is geocoded on the server (the key stays
  * here) and sent in the request body, not the URL; it is not logged or stored. Distances are straight-line
- * distances between coordinates (haversine), nearest first.
+ * distances between coordinates (haversine), nearest first. A picked suggestion already has coordinates: then the
+ * geocoder is not called again (the point must lie in Astana and its suburbs).
  */
 export async function POST(req: Request) {
   if (!isSameOrigin(req)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
@@ -24,7 +27,9 @@ export async function POST(req: Request) {
   const parsed = body.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "too_short" }, { status: 400 });
   try {
-    const point = await geocodeAddress(parsed.data.address, parsed.data.locale);
+    const given = parsed.data.point;
+    if (given && !inArea(given.lat, given.lng)) return NextResponse.json({ error: "not_found" }, { status: 404 });
+    const point: GeoPoint | null = given ? { ...given, label: parsed.data.address } : await geocodeAddress(parsed.data.address.slice(0, 120), parsed.data.locale);
     if (!point) return NextResponse.json({ error: "not_found" }, { status: 404 });
     const pharmacies = await prisma.pharmacy.findMany({
       where: { isActive: true, latitude: { not: null }, longitude: { not: null }, city: { isActive: true } },

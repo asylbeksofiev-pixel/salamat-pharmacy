@@ -155,10 +155,20 @@ test("nearest by address: validation, server errors and the list sorted by dista
   await expect(items.first()).toContainText("400 м");
   await expect(items.nth(1)).toContainText("2,6 км");
 
+  // Each result has a route from the searched point and a link to the pharmacy page.
+  await expect(items.first().getByRole("link", { name: /Маршрут/ })).toHaveAttribute("href", /rtext=51\.1,71\.4~/);
+  await expect(items.first().getByRole("link", { name: /^Подробнее/ })).toHaveAttribute("href", /\/pharmacies\//);
+
   await page.route("**/api/pharmacy/nearest", (route) => route.fulfill({ status: 503, json: { error: "unavailable" } }));
   await box.getByRole("button", { name: "Найти" }).click();
   await expect(box.locator("ol")).toHaveCount(0);
   await expect(box.getByText(/недоступен|временно/i)).toBeVisible();
+  await expect(box.getByRole("button", { name: "Повторить" })).toBeVisible();
+  // Clear: empty field, no message, focus back in the field.
+  await box.getByRole("button", { name: "Очистить адрес" }).click();
+  await expect(input).toHaveValue("");
+  await expect(input).toBeFocused();
+  await expect(box.getByText(/недоступен|временно/i)).toHaveCount(0);
 });
 
 test("catalogue API never exposes database credentials", async ({ request }) => {
@@ -340,7 +350,18 @@ test("request 'to be confirmed': catalogue product → cart → checkout → sav
   await page.goto("/catalog?q=ASP-100");
   const card = page.locator("main article").first();
   await card.getByRole("button", { name: "В корзину" }).click();
-  await expect(card.getByRole("link", { name: "В корзине" })).toBeVisible();
+  // "In cart" is a "− 1 +" stepper now: + and − change the quantity, − at 1 brings the button back.
+  const stepper = card.getByRole("group", { name: /^Количество:/ });
+  await expect(stepper.getByRole("status")).toHaveText("В корзине: 1 шт.");
+  await page.waitForTimeout(450); // taps right after adding are ignored (double-tap guard)
+  await stepper.getByRole("button", { name: /^Увеличить количество/ }).click();
+  await expect(stepper.getByRole("status")).toHaveText("В корзине: 2 шт.");
+  await stepper.getByRole("button", { name: /^Уменьшить количество/ }).click();
+  await expect(stepper.getByRole("status")).toHaveText("В корзине: 1 шт.");
+  await stepper.getByRole("button", { name: /^Убрать из корзины/ }).click();
+  await expect(card.getByRole("button", { name: "В корзину" })).toBeFocused();
+  await card.getByRole("button", { name: "В корзину" }).click();
+  await expect(stepper).toBeVisible();
   await page.goto("/cart");
   await expect(page.locator("main")).toContainText("Цену и наличие подтвердит аптека");
   await expect(page.locator("main")).toContainText("Артикул: ASP-100");
@@ -421,10 +442,13 @@ test("product page on a phone: main action, quantity, sticky bar, state after re
   const bar = page.getByRole("region", { name: "Действия с товаром" });
   await expect(bar).toBeHidden();
   await action.getByRole("button", { name: "В корзину" }).dblclick();
-  await expect(action.getByRole("link", { name: /В корзине/ })).toBeVisible();
+  // A double tap adds one unit; the action turns into "− 1 +" and a link to the cart.
+  await expect(action.getByRole("status").first()).toHaveText("В корзине: 1 шт.");
+  await expect(action.getByRole("link", { name: "Перейти в корзину" })).toBeVisible();
   await expect(action).toContainText("Товар в корзине");
-  await action.getByRole("button", { name: "Увеличить количество" }).click();
-  await expect(action.getByRole("spinbutton")).toHaveValue("2");
+  await page.waitForTimeout(450);
+  await action.getByRole("button", { name: /^Увеличить количество/ }).click();
+  await expect(action.getByRole("status").first()).toHaveText("В корзине: 2 шт.");
   // Scrolled past the action: the bar appears above the bottom navigation and does not overlap it.
   await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
   await expect(bar).toBeVisible();
@@ -432,7 +456,7 @@ test("product page on a phone: main action, quantity, sticky bar, state after re
   const navBox = (await page.getByRole("navigation", { name: "Меню" }).boundingBox())!;
   expect(barBox.y + barBox.height).toBeLessThanOrEqual(navBox.y + 1);
   await page.reload();
-  await expect(page.locator("#pdp-main-action").getByRole("spinbutton")).toHaveValue("2");
+  await expect(page.locator("#pdp-main-action").getByRole("status").first()).toHaveText("В корзине: 2 шт.");
   // Kazakh labels fit (no clipped text) on a narrow phone.
   await page.setViewportSize({ width: 320, height: 700 });
   await page.goto("/kk/catalog?q=DUP-001");
