@@ -1,5 +1,5 @@
 // Home page section "Offers and discounts". Banners come from src/config/promo-banners.ts (files in public/promo/).
-// Each banner is art-directed: a 4:3 image on phones, a 3:1 image from 768 px; both go through next/image
+// Banners are 16:9 (2:1 frame from 1024 px; an optional separate phone file); both go through next/image
 // optimisation. The frame keeps its aspect ratio before the image loads, so nothing jumps.
 // Without banners the section shows a neutral placeholder that links to the promotions page — no invented offers.
 import Link from "next/link";
@@ -21,7 +21,7 @@ function BannerPicture({ banner, locale, first }: { banner: PromoBanner; locale:
   } = getImageProps({ ...common, ...PROMO_BANNER_SIZE.mobile, src: bannerSrc(banner.mobile, locale), loading: first ? "eager" : "lazy" });
   return (
     <picture>
-      <source media="(min-width: 768px)" srcSet={desktop} sizes={common.sizes} />
+      <source media="(min-width: 1024px)" srcSet={desktop} sizes={common.sizes} />
       {/* eslint-disable-next-line jsx-a11y/alt-text -- art direction via getImageProps (optimised srcSet); alt is in the props */}
       <img {...img} srcSet={mobile} draggable={false} className="absolute inset-0 size-full object-cover" lang={dataLang(locale, alt)} />
     </picture>
@@ -58,7 +58,7 @@ export function PromoBanners({ banners, t, locale }: { banners: PromoBanner[]; t
     <PromoCarousel id="promo-track">
       {banners.map((b, i) => {
         const frame = (
-          <span className="relative block aspect-[4/3] w-full overflow-hidden bg-surface md:aspect-[3/1]">
+          <span className="relative block aspect-[16/9] w-full overflow-hidden bg-surface lg:aspect-[2/1]">
             <BannerPicture banner={b} locale={locale} first={i === 0} />
           </span>
         );
