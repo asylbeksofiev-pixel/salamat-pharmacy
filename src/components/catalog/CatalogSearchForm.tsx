@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Icon } from "../icons";
 import { SearchSubmitLabel } from "../site/SearchSubmitLabel";
 import { useSite } from "../site/SiteProvider";
+import { useRecordSearch } from "../site/useRecordSearch";
 
 /** `keep`: other catalogue parameters (sections, filters, sort) that a new search keeps; the page goes back to 1. */
 export function CatalogSearchForm({ action, q, keep = [] }: { action: string; q: string; keep?: [string, string][] }) {
@@ -12,12 +13,15 @@ export function CatalogSearchForm({ action, q, keep = [] }: { action: string; q:
   const id = useId();
   const router = useRouter();
   const [pending, startTransition] = useTransition();
+  const recordSearch = useRecordSearch();
 
   return (
     <form action={action} method="get" role="search" className="flex w-full max-w-2xl gap-2" onSubmit={(e) => {
       e.preventDefault();
       if (pending) return;
       const query = String(new FormData(e.currentTarget).get("q") ?? "").trim();
+      // A submitted query goes to the visitor's search history (this browser only).
+      if (query) recordSearch(query);
       const params = new URLSearchParams(query ? { q: query } : {});
       for (const [k, v] of keep) params.append(k, v);
       const qs = params.toString();
@@ -38,7 +42,7 @@ export function CatalogSearchForm({ action, q, keep = [] }: { action: string; q:
           maxLength={100}
           enterKeyHint="search"
           placeholder={t.items.searchPlaceholder}
-          className="sal-search-input h-12 w-full rounded-[var(--radius-lg)] border border-line-strong bg-white pr-3 pl-11 text-[0.98rem] placeholder:text-muted/85 focus:border-brand-600"
+          className="sal-search-input h-12 w-full rounded-[var(--radius-lg)] border border-line-strong bg-white pr-3 pl-11 text-base placeholder:text-muted/85 md:text-[0.98rem] focus:border-brand-600"
         />
       </div>
       <button type="submit" aria-busy={pending || undefined} className="sal-search-submit h-12 shrink-0 rounded-[var(--radius-lg)] bg-brand-600 px-5 font-semibold text-white hover:bg-brand-700">

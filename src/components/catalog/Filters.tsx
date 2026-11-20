@@ -200,7 +200,7 @@ export function SortSelect({ basePath, filters, options }: { basePath: string; f
           name="sort"
           defaultValue={current}
           onChange={(e) => router.push(`${basePath}${toQuery(e.currentTarget.form!, { sort: e.currentTarget.value })}`, { scroll: false })}
-          className="h-11 w-full max-w-[16rem] min-w-0 appearance-none truncate rounded-[var(--radius-md)] border border-line-strong bg-white pr-9 pl-3 text-sm font-medium"
+          className="h-11 w-full max-w-[16rem] min-w-0 appearance-none truncate rounded-[var(--radius-md)] border border-line-strong bg-white pr-9 pl-3 text-base font-medium md:text-sm"
         >
           {options.map((o) => (
             <option key={o.value} value={o.value} disabled={o.disabled}>
