@@ -13,7 +13,7 @@ import { Icon } from "../icons";
 
 function BannerPicture({ banner, locale, first }: { banner: PromoBanner; locale: Locale; first: boolean }) {
   const alt = banner.alt[locale];
-  const common = { alt, sizes: "(min-width: 1320px) 1272px, 100vw" };
+  const common = { alt, sizes: "(min-width: 1320px) 1272px, 100vw", quality: 90 };
   const {
     props: { srcSet: desktop },
   } = getImageProps({ ...common, ...PROMO_BANNER_SIZE.desktop, src: bannerSrc(banner.desktop, locale) });

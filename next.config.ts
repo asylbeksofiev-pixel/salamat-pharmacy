@@ -34,6 +34,9 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   poweredByHeader: false,
   images: {
+    // 75 is the default; 90 is used by the home page promo banners (large pictures with smooth gradients show
+    // visible banding and blur at 75).
+    qualities: [75, 90],
     remotePatterns: [
       ...imageHosts.map((hostname) => ({ protocol: "https" as const, hostname })),
       // Product photos stored by scripts/catalog-photos/internet.ts in the project's public Vercel Blob store

@@ -1,7 +1,7 @@
 // Banners of the "Offers and discounts" carousel on the home page.
 //
 // HOW TO ADD A BANNER (see docs/promo-banners.md):
-//   1. Put the image into  public/promo/  — promo-5.jpg, 1920 × 1080 px (16 : 9), JPG/PNG/WebP.
+//   1. Put the image into  public/promo/  — promo-5.jpg, 2560 × 1440 px (16 : 9), JPG/PNG/WebP.
 //      The frame is 16 : 9 on phones and tablets and 2 : 1 on wide screens (from 1024 px), so about 5 % of the
 //      height is trimmed at the top and bottom there: keep important text and objects away from those edges.
 //      Optionally a separate phone version (`mobile`), also 16 : 9.
