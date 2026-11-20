@@ -37,7 +37,7 @@ export function PromotionForm({ promo, pharmacies, categories }: { promo?: Promo
         <Field label="Название (RU)" name="titleRu" required defaultValue={promo?.titleRu} />
         <Field label="Название (KZ)" name="titleKk" defaultValue={promo?.titleKk} />
         <Field label="Slug" name="slug" defaultValue={promo?.slug} hint="Пусто — из названия" />
-        <Field label="Изображение (https, из разрешённого источника)" name="imageUrl" defaultValue={promo?.imageUrl} />
+        <Field label="Изображение" name="imageUrl" defaultValue={promo?.imageUrl} hint="Файл из папки public/promo репозитория (например, /promo/promo-1.jpg) или адрес https:// из разрешённого источника" />
         <SelectField label="Тип выгоды" name="type" defaultValue={promo?.type ?? "DISCOUNT"} options={[{ value: "DISCOUNT", label: "Скидка (цена со скидкой должна быть внесена как цена, прежняя — как old_price)" }, { value: "BONUS", label: "Бонус (не меняет цену товара)" }, { value: "OTHER", label: "Другое (подарок, условия)" }]} />
         <div className="grid grid-cols-2 gap-3">
           <Field label="Размер выгоды" name="benefitValue" type="number" defaultValue={promo?.benefitValue} />
@@ -49,7 +49,7 @@ export function PromotionForm({ promo, pharmacies, categories }: { promo?: Promo
         <TextArea label="Описание (KZ)" name="descriptionKk" defaultValue={promo?.descriptionKk} />
         <TextArea label="Условия и ограничения (RU)" name="termsRu" defaultValue={promo?.termsRu} />
         <TextArea label="Условия и ограничения (KZ)" name="termsKk" defaultValue={promo?.termsKk} />
-        <TextArea label="Товары: артикулы, штрихкоды или slug SKU (по одному в строке)" name="skus" defaultValue={promo?.skus.join("\n")} rows={5} />
+        <TextArea label="Товары: артикулы, штрихкоды или slug SKU (по одному в строке)" name="skus" defaultValue={promo?.skus.join("\n")} rows={5} hint="Необязательно. Без товаров и категорий акция действует для всей сети и показывается на странице «Акции»." />
         <fieldset className="flex flex-col gap-1">
           <legend className="text-sm font-medium">Категории</legend>
           <div className="max-h-40 overflow-y-auto rounded-[var(--radius-md)] border border-line p-2">

@@ -1,7 +1,8 @@
 import "server-only";
-// Address → coordinates for "nearest pharmacy". Runs only on the server; the 2GIS key never reaches the browser.
-// Providers: 2GIS (when TWOGIS_API_KEY is set) or the public OpenStreetMap Nominatim service (no key; its usage
-// policy allows light use with an identifying User-Agent, at most 1 request per second, with caching).
+// Address → coordinates for "nearest pharmacy". Runs only on the server; the Yandex keys never reach the browser.
+// Providers: the Yandex HTTP Geocoder (when YANDEX_GEOCODER_API_KEY is set) or the public OpenStreetMap Nominatim
+// service (no key; its usage policy allows light use with an identifying User-Agent, at most 1 request per second,
+// with caching). Suggestions while typing: Yandex Geosuggest (YANDEX_SUGGEST_API_KEY).
 // Searches are limited to Astana and its suburbs. Addresses typed by visitors are never logged.
 import { env } from "./env";
 
@@ -18,9 +19,9 @@ export class GeocoderUnavailableError extends Error {}
 const AREA = { west: 71.0, south: 50.85, east: 72.0, north: 51.4 };
 const CENTER = { lat: 51.128, lng: 71.43 };
 
-export function geocoderProvider(): "2gis" | "nominatim" | "off" {
+export function geocoderProvider(): "yandex" | "nominatim" | "off" {
   if (env.geocoder.mode === "off") return "off";
-  if (env.geocoder.twoGisKey) return "2gis";
+  if (env.geocoder.yandexGeocoderKey) return "yandex";
   return "nominatim";
 }
 
@@ -85,42 +86,56 @@ async function nominatim(query: string, lang: string): Promise<GeoPoint | null> 
   return Number.isFinite(lat) && Number.isFinite(lng) && inArea(lat, lng) ? { lat, lng, label: String(hit.display_name ?? query) } : null;
 }
 
-async function twoGis(query: string, lang: string): Promise<GeoPoint | null> {
+/** Yandex "kind" values precise enough to measure a distance from (not a whole city or region). */
+const YANDEX_KINDS = new Set(["house", "street", "entrance", "metro", "district", "route", "station", "airport", "vegetation", "hydro", "other"]);
+const YANDEX_LANG: Record<string, string> = { ru: "ru_RU", kk: "kk_KZ", en: "en_US" };
+
+async function yandex(query: string, lang: string, uri?: string): Promise<GeoPoint | null> {
   const params = new URLSearchParams({
-    q: query,
-    fields: "items.point,items.full_name",
-    location: `${CENTER.lng},${CENTER.lat}`,
-    page_size: "1",
-    locale: lang === "kk" ? "kk_KZ" : lang === "en" ? "en_KZ" : "ru_KZ",
-    key: env.geocoder.twoGisKey,
+    apikey: env.geocoder.yandexGeocoderKey,
+    format: "json",
+    lang: YANDEX_LANG[lang.slice(0, 2)] ?? "ru_RU",
+    results: "1",
+    bbox: `${AREA.west},${AREA.south}~${AREA.east},${AREA.north}`,
+    rspn: "1",
   });
-  const data = (await fetchJson(`https://catalog.api.2gis.com/3.0/items/geocode?${params}`)) as {
-    meta?: { code?: number };
-    result?: { items?: { point?: { lat?: number; lon?: number }; full_name?: string; name?: string }[] };
+  if (uri) params.set("uri", uri);
+  else params.set("geocode", query);
+  const res = await fetch(`https://geocode-maps.yandex.ru/v1/?${params}`, { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(6000), cache: "no-store" });
+  if (!res.ok) throw new GeocoderUnavailableError(`yandex ${res.status}`);
+  const data = (await res.json()) as {
+    response?: { GeoObjectCollection?: { featureMember?: { GeoObject?: { name?: string; description?: string; Point?: { pos?: string }; metaDataProperty?: { GeocoderMetaData?: { text?: string; kind?: string } } } }[] } };
   };
-  if (data.meta?.code && data.meta.code !== 200 && data.meta.code !== 404) throw new GeocoderUnavailableError(`2gis ${data.meta.code}`);
-  const hit = data.result?.items?.[0];
-  const lat = hit?.point?.lat;
-  const lng = hit?.point?.lon;
-  if (typeof lat !== "number" || typeof lng !== "number" || !inArea(lat, lng)) return null;
-  return { lat, lng, label: hit?.full_name || hit?.name || query };
+  const obj = data.response?.GeoObjectCollection?.featureMember?.[0]?.GeoObject;
+  const [lng, lat] = String(obj?.Point?.pos ?? "").split(" ").map(Number);
+  const meta = obj?.metaDataProperty?.GeocoderMetaData;
+  if (!Number.isFinite(lat) || !Number.isFinite(lng) || !inArea(lat, lng)) return null;
+  // "locality"/"province"/"country" mean only the city was recognised: no honest distance from that.
+  if (meta?.kind && !YANDEX_KINDS.has(meta.kind)) return null;
+  const label = (meta?.text || [obj?.name, obj?.description].filter(Boolean).join(", ") || query).replace(/^Казахстан,\s*|^Қазақстан,\s*|^Kazakhstan,\s*/i, "");
+  return { lat, lng, label };
 }
 
 /**
  * Finds the address in Astana. Returns null when nothing matches; throws GeocoderUnavailableError when the
  * service cannot be reached or is switched off. A city name is added once when the first attempt finds nothing.
  */
-export async function geocodeAddress(raw: string, lang: "ru" | "kk" | "en"): Promise<GeoPoint | null> {
+export async function geocodeAddress(raw: string, lang: "ru" | "kk" | "en", uri?: string | null): Promise<GeoPoint | null> {
   const provider = geocoderProvider();
   if (provider === "off") throw new GeocoderUnavailableError("off");
   const query = raw.replace(/\s+/g, " ").trim().slice(0, 120);
-  const key = `${provider}:${lang}:${query.toLowerCase()}`;
+  // A picked Yandex suggestion carries its object URI: the geocoder resolves exactly that object.
+  const byUri = provider === "yandex" && uri ? uri : null;
+  const key = `${provider}:${lang}:${byUri ?? query.toLowerCase()}`;
   const cached = cacheGet(key);
   if (cached !== undefined) return cached;
-  const find = provider === "2gis" ? twoGis : nominatim;
+  const find = provider === "yandex" ? yandex : nominatim;
   let result: GeoPoint | null;
   try {
-    result = await find(query, lang === "en" ? "en" : lang === "kk" ? "kk,ru" : "ru");
+    if (byUri) {
+      result = await yandex(query, lang, byUri);
+      if (result) result = { ...result, label: query || result.label };
+    } else result = await find(query, lang === "en" ? "en" : lang === "kk" ? "kk,ru" : "ru");
     if (!result && !/астан|astana|нұр-сұлтан|нур-султан/i.test(query)) result = await find(`${query}, Астана`, lang === "en" ? "en" : "ru");
   } catch (e) {
     if (e instanceof GeocoderUnavailableError) throw e;
@@ -135,15 +150,17 @@ export interface AddressSuggestion {
   label: string;
   /** Coordinates when the provider returned them: then no second geocoding request is needed. */
   point: { lat: number; lng: number } | null;
+  /** Yandex object URI: lets the geocoder resolve exactly the picked address. */
+  uri: string | null;
 }
 
 /**
- * Address suggestions while typing. Only 2GIS offers them (Suggest API, same server-side key); the public
- * Nominatim service forbids autocomplete in its usage policy, so without a 2GIS key there are no suggestions
- * and the visitor simply presses "Search". Results outside Astana and its suburbs are dropped.
+ * Address suggestions while typing: Yandex Geosuggest with its own server-side key (YANDEX_SUGGEST_API_KEY).
+ * The public Nominatim service forbids autocomplete in its usage policy, so without the key there are no
+ * suggestions and the visitor simply presses "Search". Results are limited to Astana and its suburbs.
  */
 export function suggestionsAvailable(): boolean {
-  return geocoderProvider() === "2gis";
+  return env.geocoder.mode !== "off" && !!env.geocoder.yandexSuggestKey;
 }
 
 const suggestCache = new Map<string, { at: number; value: AddressSuggestion[] }>();
@@ -155,36 +172,35 @@ export async function suggestAddresses(raw: string, lang: "ru" | "kk" | "en"): P
   const hit = suggestCache.get(key);
   if (hit && Date.now() - hit.at < CACHE_TTL_MS) return hit.value;
   const params = new URLSearchParams({
-    q: query,
-    suggest_type: "address",
-    location: `${CENTER.lng},${CENTER.lat}`,
-    fields: "items.point,items.full_address_name",
-    page_size: "6",
-    locale: lang === "kk" ? "kk_KZ" : lang === "en" ? "en_KZ" : "ru_KZ",
-    key: env.geocoder.twoGisKey,
+    apikey: env.geocoder.yandexSuggestKey,
+    text: query,
+    lang: lang === "kk" ? "kk" : lang === "en" ? "en" : "ru",
+    results: "6",
+    ll: `${CENTER.lng},${CENTER.lat}`,
+    spn: `${(AREA.east - AREA.west).toFixed(2)},${(AREA.north - AREA.south).toFixed(2)}`,
+    strict_bounds: "1",
+    types: "house,street",
+    print_address: "1",
+    attrs: "uri",
   });
-  let data: {
-    meta?: { code?: number };
-    result?: { items?: { point?: { lat?: number; lon?: number }; full_name?: string; address_name?: string; full_address_name?: string; name?: string }[] };
-  };
+  let data: { results?: { title?: { text?: string }; subtitle?: { text?: string }; address?: { formatted_address?: string }; uri?: string }[] };
   try {
-    data = (await fetchJson(`https://catalog.api.2gis.com/3.0/suggests?${params}`)) as typeof data;
+    const res = await fetch(`https://suggest-maps.yandex.ru/v1/suggest?${params}`, { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(5000), cache: "no-store" });
+    if (!res.ok) throw new GeocoderUnavailableError(`yandex suggest ${res.status}`);
+    data = (await res.json()) as typeof data;
   } catch (e) {
     if (e instanceof GeocoderUnavailableError) throw e;
     throw new GeocoderUnavailableError((e as Error).name);
   }
-  if (data.meta?.code && data.meta.code !== 200 && data.meta.code !== 404) throw new GeocoderUnavailableError(`2gis ${data.meta.code}`);
   const seen = new Set<string>();
   const out: AddressSuggestion[] = [];
-  for (const it of data.result?.items ?? []) {
-    const label = (it.full_address_name || it.full_name || it.address_name || it.name || "").trim();
+  for (const it of data.results ?? []) {
+    const formatted = it.address?.formatted_address?.replace(/^(Казахстан|Қазақстан|Kazakhstan),\s*/i, "");
+    const label = (formatted || [it.title?.text, it.subtitle?.text].filter(Boolean).join(", ")).trim();
     if (!label || seen.has(label.toLowerCase())) continue;
-    const lat = it.point?.lat;
-    const lng = it.point?.lon;
-    const point = typeof lat === "number" && typeof lng === "number" ? { lat, lng } : null;
-    if (point && !inArea(point.lat, point.lng)) continue;
     seen.add(label.toLowerCase());
-    out.push({ label: label.slice(0, 160), point });
+    const uri = typeof it.uri === "string" && it.uri.length <= 500 ? it.uri : null;
+    out.push({ label: label.slice(0, 160), point: null, uri });
   }
   if (suggestCache.size >= CACHE_MAX) suggestCache.delete(suggestCache.keys().next().value!);
   suggestCache.set(key, { at: Date.now(), value: out });

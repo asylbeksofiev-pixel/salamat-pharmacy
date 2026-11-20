@@ -113,8 +113,15 @@ test("branches: closed ones are gone, new ones are listed and mapped, nearest ph
   // The placeholder phone from the branch file is never shown.
   await expect(main.locator('a[href="tel:+77000000000"]')).toHaveCount(0);
   await expect(main.locator("article", { hasText: "пр. Туран" })).toContainText("Телефон уточняется");
-  // Every listed branch has a marker; closed branch pages are gone.
-  await expect(page.locator(".sal-pin")).toHaveCount(17);
+  // Yandex Maps widget: one marker per listed branch; no 2GIS links anywhere on the page.
+  const map = page.frameLocator("iframe[title*='Яндекс']").owner();
+  await expect(map).toHaveAttribute("src", /^https:\/\/yandex\.kz\/map-widget\/v1\//);
+  const pts = new URL((await map.getAttribute("src"))!).searchParams.get("pt")!.split("~");
+  expect(pts).toHaveLength(17);
+  await expect(page.locator("a[href*='2gis']")).toHaveCount(0);
+  await expect(main).not.toContainText(/2ГИС|2GIS/);
+  await expect(card24.getByRole("link", { name: /Маршрут/ })).toHaveAttribute("href", /^https:\/\/yandex\.kz\/maps\/\?rtext=~/);
+  // Closed branch pages are gone.
   expect((await page.goto("/pharmacies/mangilik-el-49"))?.status()).toBe(404);
   // Geolocation: the visitor stands next to пр. Мәңгілік Ел, 24.
   await context.grantPermissions(["geolocation"]);
@@ -124,8 +131,11 @@ test("branches: closed ones are gone, new ones are listed and mapped, nearest ph
   const nearestBox = page.locator("section[aria-labelledby=nearest-title]");
   await expect(nearestBox).toContainText("пр. Мәңгілік Ел, д. 24");
   await expect(nearestBox).toContainText("8 (702) 531 44 85");
-  await expect(page.locator(".sal-me-label")).toHaveText("Вы здесь");
-  await expect(page.locator(".leaflet-popup-content")).toContainText("Построить маршрут");
+  // The map centres on the nearest pharmacy; the visitor's position stays in the browser (not in the map URL).
+  await expect(main).toContainText("На карте: пр. Мәңгілік Ел, д. 24");
+  await expect(map).toHaveAttribute("src", /[?&]z=16/);
+  expect(await map.getAttribute("src")).not.toContain("51.115000");
+  await expect(nearestBox.getByRole("link", { name: /Построить маршрут/ })).toHaveAttribute("href", /rtext=51\.115000,71\.433000~/);
 });
 
 test("nearest by address: validation, server errors and the list sorted by distance", async ({ page, request }) => {
@@ -156,7 +166,7 @@ test("nearest by address: validation, server errors and the list sorted by dista
   await expect(items.nth(1)).toContainText("2,6 км");
 
   // Each result has a route from the searched point and a link to the pharmacy page.
-  await expect(items.first().getByRole("link", { name: /Маршрут/ })).toHaveAttribute("href", /rtext=51\.1,71\.4~/);
+  await expect(items.first().getByRole("link", { name: /Маршрут/ })).toHaveAttribute("href", /yandex\.kz\/maps\/\?rtext=51\.100000,71\.400000~/);
   await expect(items.first().getByRole("link", { name: /^Подробнее/ })).toHaveAttribute("href", /\/pharmacies\//);
 
   await page.route("**/api/pharmacy/nearest", (route) => route.fulfill({ status: 503, json: { error: "unavailable" } }));
@@ -463,4 +473,33 @@ test("product page on a phone: main action, quantity, sticky bar, state after re
   const cut = await page.locator("main").evaluate((m) => [...m.querySelectorAll("button span, a span")].filter((s) => !s.closest(".sr-only") && s.scrollWidth > s.clientWidth + 1).length);
   expect(cut).toBe(0);
   await ctx.close();
+});
+
+test("product page recommendations: similar names and the same section, without the product itself", async ({ page }) => {
+  await page.goto("/catalog?q=P-500-20");
+  await page.locator("main article h3 a").first().click();
+  await expect(page).toHaveURL(/\/catalog\/item\/(\d+)$/);
+  const id = page.url().split("/").pop()!;
+  const similar = page.locator("section[aria-labelledby=item-similar]");
+  await expect(similar).toBeVisible();
+  const names = await similar.locator("article h3").allTextContents();
+  expect(names.length).toBeGreaterThan(0);
+  for (const n of names) expect(n.toLowerCase()).toMatch(/^парацетамол/);
+  const ids = await page.locator("main [aria-roledescription] article").evaluateAll((els) => els.map((e) => e.getAttribute("data-item-id")));
+  expect(ids).not.toContain(id);
+  expect(new Set(ids).size).toBe(ids.length);
+  // Cards keep their actions inside the carousel.
+  await expect(similar.getByRole("button", { name: "В корзину" }).first()).toBeVisible();
+  await expect(similar.getByRole("button", { name: /избранное/ }).first()).toBeVisible();
+});
+
+test("promotions page: current offers as cards, ended ones hidden", async ({ page }) => {
+  await page.goto("/promotions");
+  const main = page.locator("main");
+  await expect(main.locator("article")).toHaveCount(1);
+  await expect(main).toContainText("Демо: бонус за витамин D3");
+  await expect(main).toContainText(/до \d+ декабря 2026/);
+  await expect(main).not.toContainText("завершённая скидка");
+  await page.goto("/en/promotions");
+  await expect(page.locator("main article")).toHaveCount(1);
 });

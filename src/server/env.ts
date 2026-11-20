@@ -32,12 +32,14 @@ export const env = {
   cookieSecure: process.env.COOKIE_SECURE ? bool(process.env.COOKIE_SECURE) : isProd,
   /**
    * Address search for "nearest pharmacy" (server only, never sent to the browser).
-   * With TWOGIS_API_KEY the 2GIS geocoder is used; otherwise the public OpenStreetMap Nominatim service
-   * (no key, light use only: 1 request per second, cached). GEOCODER=off disables the search.
+   * YANDEX_GEOCODER_API_KEY: Yandex HTTP Geocoder; without it the public OpenStreetMap Nominatim service
+   * (no key, light use only: 1 request per second, cached). YANDEX_SUGGEST_API_KEY: Yandex Geosuggest
+   * (address suggestions while typing). GEOCODER=off disables the search.
    */
   geocoder: {
     mode: (process.env.GEOCODER || "").toLowerCase(),
-    twoGisKey: process.env.TWOGIS_API_KEY || "",
+    yandexGeocoderKey: process.env.YANDEX_GEOCODER_API_KEY || "",
+    yandexSuggestKey: process.env.YANDEX_SUGGEST_API_KEY || "",
   },
 };
 

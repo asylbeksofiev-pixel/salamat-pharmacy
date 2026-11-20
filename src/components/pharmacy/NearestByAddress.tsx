@@ -1,18 +1,19 @@
 "use client";
 // "Find the nearest pharmacy by address".
-//   1. The visitor types an address. With a 2GIS key on the server, suggestions appear after a short pause
+//   1. The visitor types an address. With a Yandex Geosuggest key on the server, suggestions appear after a short pause
 //      (/api/pharmacy/address-suggest, debounced, cancelled when the text changes). Nominatim (no key) does not
 //      allow autocomplete, so then the visitor just presses "Search".
 //   2. Picking a suggestion or pressing "Search" asks /api/pharmacy/nearest: the server geocodes the address
 //      (or takes the picked suggestion's coordinates) and returns the pharmacies sorted by the real distance
 //      between coordinates. The address goes in the request body, never into the URL, and is not stored.
-//   3. The list shows address, distance, phone, "Choose", "Details" and a route from the address (Yandex Maps).
+//   3. The list shows address, distance, phone, "Choose", "Details" and a route from the address in Yandex Maps.
 // Only pharmacies with coordinates take part; without coordinates the block says so instead of guessing.
 import Link from "next/link";
 import { useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { fmt, dataLang, localeTags } from "@/lib/i18n/config";
 import { formatPhone, telHref } from "@/lib/format";
 import { formatDistance } from "@/lib/geo";
+import { yandexRouteUrl } from "@/lib/yandex-maps";
 import { useSite } from "../site/SiteProvider";
 import { SelectPharmacyButton } from "../catalog/SelectPharmacyButton";
 import { Button, Spinner } from "../ui/Button";
@@ -30,7 +31,7 @@ export interface NearestPharmacy {
 }
 
 type Point = { lat: number; lng: number };
-type Suggestion = { label: string; point: Point | null };
+type Suggestion = { label: string; point: Point | null; uri: string | null };
 
 type State =
   | { kind: "idle" }
@@ -42,10 +43,6 @@ const SHOWN = 5;
 const SUGGEST_DELAY_MS = 350;
 const MIN_CHARS = 3;
 
-/** Directions from the searched address to the pharmacy (Yandex Maps, same service as on the map). */
-function routeHref(from: Point, to: Point) {
-  return `https://yandex.kz/maps/?rtext=${from.lat},${from.lng}~${to.lat},${to.lng}&rtt=auto`;
-}
 
 export function NearestByAddress({
   pharmacies,
@@ -55,8 +52,8 @@ export function NearestByAddress({
 }: {
   /** Active pharmacies that have coordinates (only they can be ranked by distance). */
   pharmacies: NearestPharmacy[];
-  provider: "2gis" | "nominatim" | "off";
-  /** Address suggestions while typing (only with a 2GIS key). */
+  provider: "yandex" | "nominatim" | "off";
+  /** Address suggestions while typing (only with a Yandex Geosuggest key). */
   suggestions: boolean;
   /** Active pharmacies without coordinates (not ranked; listed below the block). */
   missingCoords: number;
@@ -74,14 +71,14 @@ export function NearestByAddress({
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(-1);
   const [suggestLoading, setSuggestLoading] = useState(false);
-  const [lastQuery, setLastQuery] = useState<{ address: string; point: Point | null } | null>(null);
+  const [lastQuery, setLastQuery] = useState<{ address: string; point: Point | null; uri: string | null } | null>(null);
   const inflight = useRef<AbortController | null>(null);
   const suggestCtrl = useRef<AbortController | null>(null);
   const suggestCache = useRef(new Map<string, Suggestion[]>());
   // Set when the text was put into the field by picking a suggestion: no new suggestions for it.
   const [picked, setPicked] = useState<string | null>(null);
   const byId = new Map(pharmacies.map((p) => [p.id, p]));
-  const service = provider === "2gis" ? t.pharmacy.service2gis : t.pharmacy.serviceOsm;
+  const service = provider === "yandex" ? t.pharmacy.serviceYandex : t.pharmacy.serviceOsm;
 
   // Debounced suggestions: one request after the visitor pauses typing, the previous one is cancelled.
   useEffect(() => {
@@ -134,7 +131,7 @@ export function NearestByAddress({
     setActive(-1);
   };
 
-  const search = async (address: string, point: Point | null) => {
+  const search = async (address: string, point: Point | null, uri: string | null = null) => {
     closeList();
     suggestCtrl.current?.abort();
     if (address.trim().length < MIN_CHARS) {
@@ -142,7 +139,7 @@ export function NearestByAddress({
       inputRef.current?.focus();
       return;
     }
-    setLastQuery({ address, point });
+    setLastQuery({ address, point, uri });
     inflight.current?.abort();
     const ctrl = new AbortController();
     inflight.current = ctrl;
@@ -152,7 +149,7 @@ export function NearestByAddress({
       const res = await fetch("/api/pharmacy/nearest", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ address: address.trim(), locale, ...(point ? { point } : {}) }),
+        body: JSON.stringify({ address: address.trim(), locale, ...(point ? { point } : {}), ...(uri ? { uri } : {}) }),
         signal: ctrl.signal,
       });
       const data = await res.json().catch(() => ({}));
@@ -170,7 +167,7 @@ export function NearestByAddress({
   const pick = (s: Suggestion) => {
     setPicked(s.label);
     setValue(s.label);
-    void search(s.label, s.point);
+    void search(s.label, s.point, s.uri);
   };
 
   const onSubmit = (e: FormEvent<HTMLFormElement>) => {
@@ -354,7 +351,7 @@ export function NearestByAddress({
               {state.message}
             </p>
             {state.retry && lastQuery ? (
-              <Button size="sm" variant="outline" onClick={() => search(lastQuery.address, lastQuery.point)}>
+              <Button size="sm" variant="outline" onClick={() => search(lastQuery.address, lastQuery.point, lastQuery.uri)}>
                 {t.common.retry}
               </Button>
             ) : null}
@@ -401,7 +398,7 @@ export function NearestByAddress({
                   <div className="flex shrink-0 flex-wrap items-center gap-2 pl-11 lg:pl-0">
                     <SelectPharmacyButton id={p.id} selected={selected?.id === p.id} />
                     <a
-                      href={routeHref(state.point, p)}
+                      href={yandexRouteUrl(p, state.point)}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="inline-flex h-11 items-center gap-1.5 rounded-[var(--radius-md)] px-3 text-sm font-semibold text-brand-700 transition-colors hover:bg-brand-50"
@@ -427,7 +424,7 @@ export function NearestByAddress({
             </button>
           ) : null}
           <p className="mt-2 text-xs text-muted">
-            {state.provider === "2gis" ? t.pharmacy.geocoder2gis : t.pharmacy.geocoderOsm} · {t.pharmacy.distanceNote}
+            {state.provider === "yandex" ? t.pharmacy.geocoderYandex : t.pharmacy.geocoderOsm} · {t.pharmacy.distanceNote}
             {missingCoords > 0 ? ` · ${fmt(t.pharmacy.addressPartialCoords, { count: missingCoords })}` : null}
           </p>
         </>

@@ -7,6 +7,7 @@ import { audit } from "@/server/audit";
 import { bool, guarded, optInt, optStr, str } from "@/server/admin/guard";
 import { done, fail } from "@/server/admin/action-state";
 import { slugify } from "@/lib/slug";
+import { isPromotionImage } from "@/lib/promo-image";
 
 /** "2026-12-01T10:00" from <input type=datetime-local>, interpreted as Astana time (UTC+5). */
 function parseLocal(v: string): Date | null {
@@ -23,7 +24,11 @@ const schema = z.object({
   descriptionKk: z.string().max(3000).nullable(),
   termsRu: z.string().max(3000).nullable(),
   termsKk: z.string().max(3000).nullable(),
-  imageUrl: z.string().url().startsWith("https://", "Только https").max(1000).nullable(),
+  imageUrl: z
+    .string()
+    .max(1000)
+    .refine(isPromotionImage, "Укажите файл из public/promo (например, /promo/promo-1.jpg) или адрес https://")
+    .nullable(),
   type: z.enum(["DISCOUNT", "BONUS", "OTHER"]),
   benefitValue: z.number().int().positive().max(10_000_000).nullable(),
   benefitUnit: z.enum(["KZT", "PERCENT"]).nullable(),
@@ -64,7 +69,9 @@ export const savePromotion = guarded("promotions.write", async (user, id: string
   const found = new Set(variants.flatMap((v) => [v.salamatSku, v.barcode, v.slug]));
   const missing = refs.filter((r) => !found.has(r));
   if (missing.length) return fail(`Не найдены SKU: ${missing.slice(0, 10).join(", ")}`);
-  if (data.status === "PUBLISHED" && !variants.length && !categoryIds.length) return fail("Укажите товары (SKU) или категории, участвующие в акции");
+  // Products and categories are optional: a chain-wide offer (no product list) is shown on the promotions page
+  // only; with SKUs or categories it also marks those products. The catalogue (pharmacy_products) has no SKU
+  // records, so requiring them made it impossible to publish an offer at all.
   const clash = await prisma.promotion.findFirst({ where: { slug: data.slug, NOT: id ? { id } : undefined } });
   if (clash) return fail("Такой slug уже используется");
   const relations = {
@@ -87,6 +94,8 @@ export const savePromotion = guarded("promotions.write", async (user, id: string
     await audit(user.id, "promotion.create", "Promotion", p.id, `Создана акция «${data.titleRu}»`);
   }
   revalidatePath("/admin/promotions");
+  revalidatePath("/[locale]/promotions", "page");
+  revalidatePath("/[locale]", "page");
   if (!id) redirect(`/admin/promotions/${promoId}`);
   return done("Сохранено");
 });

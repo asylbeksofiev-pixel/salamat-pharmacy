@@ -26,7 +26,7 @@ export function CategoryTile({ slug, name, iconKey, locale }: { slug: string; na
   );
 }
 
-export function PharmacyCard({ p, t, locale, selected, routes }: { p: PharmacyView; t: Dictionary; locale: Locale; selected: boolean; routes: { twoGis: string; yandex: string } }) {
+export function PharmacyCard({ p, t, locale, selected, routes }: { p: PharmacyView; t: Dictionary; locale: Locale; selected: boolean; routes: { route: string; place: string } }) {
   return (
     <article data-selected={selected || undefined} className={`sal-pharmacy-card flex h-full flex-col gap-3 overflow-hidden rounded-[var(--radius-xl)] border bg-white p-4 sm:p-5 ${selected ? "border-brand-600 ring-1 ring-brand-600" : "border-line"}`}>
       {/* Branch photos first (only confirmed ones), then address, contacts and buttons. */}
@@ -66,10 +66,10 @@ export function PharmacyCard({ p, t, locale, selected, routes }: { p: PharmacyVi
       </p>
       <div className="mt-auto flex flex-wrap items-center gap-2 pt-2">
         <SelectPharmacyButton id={p.id} selected={selected} />
-        <a href={routes.twoGis} target="_blank" rel="noopener noreferrer" className="group inline-flex h-11 items-center gap-1.5 rounded-[var(--radius-md)] px-3 text-sm font-semibold text-brand-700 transition-colors hover:bg-brand-50">
+        <a href={routes.route} target="_blank" rel="noopener noreferrer" className="group inline-flex h-11 items-center gap-1.5 rounded-[var(--radius-md)] px-3 text-sm font-semibold text-brand-700 transition-colors hover:bg-brand-50">
           <Icon name="route" size={18} className="transition-transform duration-200 motion-safe:group-hover:translate-x-0.5" />
           {t.pharmacy.route}
-          <span className="sr-only"> — {t.pharmacy.route2gis}</span>
+          <span className="sr-only"> — {t.pharmacy.routeYandex}</span>
         </a>
       </div>
     </article>
@@ -127,11 +127,14 @@ export function PromotionCard({ p, t, locale, featured = false }: { p: Promotion
         </h3>
         {p.description ? <p className={`text-[0.95rem] break-words text-ink-soft ${featured ? "line-clamp-4" : "line-clamp-3"}`}>{p.description}</p> : null}
         <dl className="mt-auto flex flex-col gap-1 border-t border-line pt-3 text-sm">
-          <div className="flex items-center gap-2 text-ink-soft">
-            <dt className="sr-only">{t.promotions.period}</dt>
-            <Icon name="clock" size={16} className="shrink-0 text-muted" />
-            <dd>{p.endsAt ? fmt(t.promotions.until, { date: formatDate(p.endsAt, locale) }) : t.promotions.noEnd}</dd>
-          </div>
+          {/* The period only when staff set an end date: no end date is not shown as "unlimited". */}
+          {p.endsAt ? (
+            <div className="flex items-center gap-2 text-ink-soft">
+              <dt className="sr-only">{t.promotions.period}</dt>
+              <Icon name="clock" size={16} className="shrink-0 text-muted" />
+              <dd>{fmt(t.promotions.until, { date: formatDate(p.endsAt, locale) })}</dd>
+            </div>
+          ) : null}
           {p.appliesToAllPharmacies || p.pharmacies.length ? (
             <div className="flex items-center gap-2 text-ink-soft">
               <dt className="sr-only">{t.promotions.pharmacies}</dt>

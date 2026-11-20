@@ -11,6 +11,8 @@ const body = z.object({
   locale: z.enum(["ru", "kk", "en"]).default("ru"),
   /** Coordinates of an address suggestion the visitor picked (from /api/pharmacy/address-suggest). */
   point: z.object({ lat: z.number().finite(), lng: z.number().finite() }).optional(),
+  /** Yandex object URI of a picked suggestion: the geocoder resolves exactly that object. */
+  uri: z.string().startsWith("ymapsbm1://").max(500).optional(),
 });
 
 /**
@@ -29,7 +31,7 @@ export async function POST(req: Request) {
   try {
     const given = parsed.data.point;
     if (given && !inArea(given.lat, given.lng)) return NextResponse.json({ error: "not_found" }, { status: 404 });
-    const point: GeoPoint | null = given ? { ...given, label: parsed.data.address } : await geocodeAddress(parsed.data.address.slice(0, 120), parsed.data.locale);
+    const point: GeoPoint | null = given ? { ...given, label: parsed.data.address } : await geocodeAddress(parsed.data.address.slice(0, 120), parsed.data.locale, parsed.data.uri);
     if (!point) return NextResponse.json({ error: "not_found" }, { status: 404 });
     const pharmacies = await prisma.pharmacy.findMany({
       where: { isActive: true, latitude: { not: null }, longitude: { not: null }, city: { isActive: true } },

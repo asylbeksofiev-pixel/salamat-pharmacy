@@ -1,4 +1,5 @@
 import "server-only";
+import { yandexRouteUrl, yandexSearchUrl } from "@/lib/yandex-maps";
 import { cache } from "react";
 import { cookies } from "next/headers";
 import { prisma } from "./db";
@@ -95,17 +96,12 @@ export const getSelectedPharmacy = cache(async (locale: Locale): Promise<Pharmac
   return list.find((p) => p.id === id) ?? null;
 });
 
-/** Links that open an external map app; work without coordinates by searching the address. */
-export function routeLinks(p: { addressRu: string; cityRu: string; latitude: number | null; longitude: number | null }) {
-  const text = encodeURIComponent(`${p.cityRu}, ${p.addressRu.replace(/,?\s*н\.\s?п\.?\s*\d+/i, "")}`);
+/** Links to Yandex Maps: a route by car and the place itself; without coordinates both search the address. */
+export function routeLinks(p: { addressRu: string; cityRu: string; latitude: number | null; longitude: number | null }): { route: string; place: string } {
   if (p.latitude !== null && p.longitude !== null) {
-    return {
-      twoGis: `https://2gis.kz/astana/geo/${p.longitude},${p.latitude}`,
-      yandex: `https://yandex.kz/maps/?rtext=~${p.latitude},${p.longitude}&rtt=auto`,
-    };
+    const at = { lat: p.latitude, lng: p.longitude };
+    return { route: yandexRouteUrl(at), place: `https://yandex.kz/maps/?pt=${at.lng},${at.lat}&z=17&l=map` };
   }
-  return {
-    twoGis: `https://2gis.kz/astana/search/${text}`,
-    yandex: `https://yandex.kz/maps/?text=${text}`,
-  };
+  const search = yandexSearchUrl(`${p.cityRu}, ${p.addressRu.replace(/,?\s*н\.\s?п\.?\s*\d+/i, "")}`);
+  return { route: search, place: search };
 }

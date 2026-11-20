@@ -8,7 +8,7 @@ const imageHosts = (process.env.IMAGE_HOSTS ?? "")
   .filter(Boolean);
 
 // Content Security Policy for production. Next.js injects inline bootstrap scripts, hence 'unsafe-inline';
-// no third-party scripts are loaded. The pharmacy map (Leaflet, bundled) loads OpenStreetMap tiles as images.
+// no third-party scripts are loaded. The pharmacy map is the official Yandex Maps widget in an iframe (frame-src).
 const csp = [
   "default-src 'self'",
   "script-src 'self' 'unsafe-inline'",
@@ -16,7 +16,7 @@ const csp = [
   "img-src 'self' data: blob: https:",
   "font-src 'self' data:",
   "connect-src 'self'",
-  "frame-src 'none'",
+  "frame-src https://yandex.kz https://yandex.ru",
   "frame-ancestors 'self'",
   "base-uri 'self'",
   "form-action 'self'",

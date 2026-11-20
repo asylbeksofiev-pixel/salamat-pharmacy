@@ -63,7 +63,11 @@ export default async function HomePage({ params }: PageProps<"/[locale]">) {
     getCategoryTree(locale),
     getPharmacies(locale),
     getSelectedPharmacy(locale),
-    getActivePromotions(locale),
+    // The home page never fails because of promotions: on a database error the block is simply hidden.
+    getActivePromotions(locale).catch((e: Error) => {
+      console.error("home promotions failed", e.message.slice(0, 200));
+      return [];
+    }),
     getSettings(),
     getStorefrontState(),
     catalogPreview(locale),

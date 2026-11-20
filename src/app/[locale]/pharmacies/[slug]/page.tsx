@@ -67,13 +67,14 @@ export default async function PharmacyPage({ params }: PageProps<"/[locale]/phar
           {store.orderingEnabled && !p.acceptsOrders ? <Notice tone="warning">{t.pharmacy.notAcceptingOrders}</Notice> : null}
           <div className="flex flex-wrap gap-2">
             <SelectPharmacyButton id={p.id} selected={selected?.id === p.id} />
-            <a href={routes.twoGis} target="_blank" rel="noopener noreferrer" className="inline-flex h-11 items-center gap-2 rounded-[var(--radius-md)] border border-line-strong px-4 font-semibold hover:border-brand-600">
+            <a href={routes.route} target="_blank" rel="noopener noreferrer" className="inline-flex h-11 items-center gap-2 rounded-[var(--radius-md)] border border-line-strong px-4 font-semibold hover:border-brand-600">
               <Icon name="route" size={18} />
-              {t.pharmacy.route2gis}
+              {t.pharmacy.buildRoute}
+              <span className="sr-only"> — {t.pharmacy.routeYandex}</span>
             </a>
-            <a href={routes.yandex} target="_blank" rel="noopener noreferrer" className="inline-flex h-11 items-center gap-2 rounded-[var(--radius-md)] border border-line-strong px-4 font-semibold hover:border-brand-600">
+            <a href={routes.place} target="_blank" rel="noopener noreferrer" className="inline-flex h-11 items-center gap-2 rounded-[var(--radius-md)] border border-line-strong px-4 font-semibold hover:border-brand-600">
               <Icon name="external" size={18} />
-              {t.pharmacy.routeYandex}
+              {t.pharmacy.openInYandex}
             </a>
           </div>
           <section aria-labelledby="ph-phones" className="rounded-[var(--radius-xl)] border border-line p-5">

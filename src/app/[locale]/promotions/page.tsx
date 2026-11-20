@@ -4,7 +4,7 @@ import { getActivePromotions } from "@/server/promotions";
 import { pageMetadata } from "@/server/seo";
 import { env } from "@/server/env";
 import { Breadcrumbs } from "@/components/ui/Breadcrumbs";
-import { EmptyState } from "@/components/ui/Feedback";
+import { EmptyState, ErrorState } from "@/components/ui/Feedback";
 import { ButtonLink } from "@/components/ui/Button";
 import { PromotionCard, featuredPromotionIndex } from "@/components/catalog/Tiles";
 
@@ -19,7 +19,15 @@ export default async function PromotionsPage({ params }: PageProps<"/[locale]/pr
   const { locale } = await params;
   if (!isLocale(locale)) notFound();
   const t = getDictionary(locale);
-  const promos = await getActivePromotions(locale);
+  // A database error must not take the page down: the visitor gets an error message with "Retry" instead.
+  let promos: Awaited<ReturnType<typeof getActivePromotions>> = [];
+  let failed = false;
+  try {
+    promos = await getActivePromotions(locale);
+  } catch (e) {
+    failed = true;
+    console.error("promotions failed", (e as Error).message.slice(0, 200));
+  }
   // Same promotions in the same order; only the most substantial one is shown larger, first.
   const fi = featuredPromotionIndex(promos);
   const first = promos[fi];
@@ -28,7 +36,11 @@ export default async function PromotionsPage({ params }: PageProps<"/[locale]/pr
     <div className="container-page py-6 md:py-8">
       <Breadcrumbs items={[{ label: t.common.home, href: localizedPath(locale, "/") }, { label: t.promotions.title }]} label={t.common.breadcrumbs} baseUrl={env.appUrl} />
       <h1 className="mt-4 text-[1.75rem] font-bold tracking-tight sm:text-[2.1rem]">{t.promotions.title}</h1>
-      {first ? (
+      {failed ? (
+        <div className="mt-6">
+          <ErrorState title={t.promotions.loadError} text={t.promotions.loadErrorText} action={<ButtonLink href={localizedPath(locale, "/promotions")}>{t.common.retry}</ButtonLink>} />
+        </div>
+      ) : first ? (
         <>
           <p className="mt-1 max-w-2xl text-muted">{t.promotions.intro}</p>
           <ul className="anim-list mt-6 grid gap-4 md:grid-cols-2">

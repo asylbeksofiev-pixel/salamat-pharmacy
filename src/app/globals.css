@@ -773,113 +773,6 @@ dialog.sal-drawer-bottom[data-closing] {
   }
 }
 
-/* Pharmacy map (Leaflet) */
-.sal-map.leaflet-container {
-  font: inherit;
-  background: var(--color-surface);
-}
-.sal-map .leaflet-control-attribution {
-  font-size: 0.68rem;
-}
-.sal-map .leaflet-bar a {
-  width: 36px;
-  height: 36px;
-  line-height: 36px;
-}
-.sal-pin {
-  color: var(--color-brand-600);
-  filter: drop-shadow(0 2px 3px rgb(0 0 0 / 0.25));
-  transition: color 160ms ease;
-}
-.sal-pin svg {
-  display: block;
-  transform-origin: 50% 100%;
-  transition: transform 160ms var(--ease-out-soft);
-}
-.sal-pin:hover svg,
-.sal-pin:focus-visible svg {
-  transform: scale(1.12);
-}
-.sal-pin:focus-visible {
-  outline: 3px solid var(--color-brand-600);
-  outline-offset: 2px;
-  border-radius: 6px;
-}
-.sal-pin--selected {
-  color: var(--color-brand-800);
-}
-.sal-pin--nearest {
-  color: var(--color-accent-500);
-}
-.sal-pin--nearest svg {
-  transform: scale(1.15);
-}
-.sal-me-dot {
-  position: relative;
-  display: block;
-  width: 22px;
-  height: 22px;
-  border-radius: 9999px;
-  background: #2563eb;
-  border: 3px solid #fff;
-  box-shadow: 0 1px 4px rgb(0 0 0 / 0.35);
-}
-.sal-me-dot::after {
-  content: "";
-  position: absolute;
-  inset: -3px;
-  border-radius: inherit;
-  border: 2px solid #3b82f6;
-  animation: sal-me-pulse 1.8s ease-out infinite;
-}
-.sal-me-label.leaflet-tooltip {
-  border: 0;
-  border-radius: 9999px;
-  padding: 2px 10px;
-  background: #1d4ed8;
-  color: #fff;
-  font-weight: 600;
-  font-size: 0.75rem;
-  box-shadow: 0 1px 4px rgb(0 0 0 / 0.25);
-}
-.sal-me-label.leaflet-tooltip-top::before {
-  border-top-color: #1d4ed8;
-}
-.sal-map .leaflet-popup-content-wrapper {
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-pop);
-}
-.sal-map .leaflet-popup-content {
-  margin: 14px 16px;
-  font-size: inherit;
-  line-height: inherit;
-}
-.sal-map .leaflet-popup-content p {
-  margin: 0;
-}
-.sal-map .sal-popup a {
-  color: var(--color-brand-700);
-}
-.sal-map .sal-popup a[href^="tel:"] {
-  color: var(--color-ink);
-}
-.sal-map a.leaflet-popup-close-button {
-  width: 32px;
-  height: 32px;
-  font-size: 20px;
-  line-height: 30px;
-}
-@keyframes sal-me-pulse {
-  from {
-    transform: scale(1);
-    opacity: 0.9;
-  }
-  to {
-    transform: scale(2.4);
-    opacity: 0;
-  }
-}
-
 /* Accordions (<details>): smooth height where the browser supports it */
 :root {
   interpolate-size: allow-keywords;
@@ -1021,7 +914,6 @@ details[open]::details-content {
     animation: none;
     opacity: 0;
   }
-  .sal-me-dot::after,
   .sal-fav-burst {
     animation: none;
     display: none;

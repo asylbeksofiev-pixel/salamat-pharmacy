@@ -10,8 +10,8 @@ const body = z.object({
 });
 
 /**
- * Address suggestions for "nearest pharmacy" (2GIS Suggest API; the key stays on the server). The text goes in
- * the request body, is not logged or stored. Without a 2GIS key the endpoint answers 404 and the page does not
+ * Address suggestions for "nearest pharmacy" (Yandex Geosuggest; the key stays on the server). The text goes in
+ * the request body, is not logged or stored. Without YANDEX_SUGGEST_API_KEY the endpoint answers 404 and the page does not
  * call it (the public Nominatim service does not allow autocomplete).
  */
 export async function POST(req: Request) {

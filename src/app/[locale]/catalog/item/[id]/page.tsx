@@ -1,9 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { dataLang, fmt, getDictionary, isLocale, localizedPath, type Locale } from "@/lib/i18n";
+import { dataLang, fmt, getDictionary, isLocale, localizedPath, type Dictionary, type Locale } from "@/lib/i18n";
 import { formatPhone, telHref } from "@/lib/format";
-import { getCatalogItem, isCatalogId, listCatalogItems, type CatalogItem } from "@/server/catalog-items";
-import { descendantIds, getCategoryTree } from "@/server/catalog";
+import { getCatalogItem, isCatalogId, type CatalogItem } from "@/server/catalog-items";
+import { productRecommendations } from "@/server/recommendations";
 import { getSelectedPharmacy } from "@/server/pharmacies";
 import { getSettings } from "@/server/settings";
 import { pageMetadata } from "@/server/seo";
@@ -30,22 +30,23 @@ export async function generateMetadata({ params }: PageProps<"/[locale]/catalog/
   return pageMetadata(locale, `/catalog/item/${item.id}`, item.name, desc);
 }
 
-/**
- * Up to 12 other products of the same section (stable catalogue order, not "recommended"). Empty on any error:
- * the product page must never fail because of this block.
- */
-async function sectionNeighbours(item: CatalogItem, locale: Locale): Promise<CatalogItem[]> {
-  if (!item.categorySlug) return [];
-  try {
-    const tree = await getCategoryTree(locale);
-    const node = tree.bySlug.get(item.categorySlug);
-    if (!node) return [];
-    const page = await listCatalogItems({ categoryIds: descendantIds(node), page: 1, pageSize: 13, locale });
-    return page.items.filter((x) => x.id !== item.id).slice(0, 12);
-  } catch (e) {
-    console.error("section neighbours failed", (e as Error).message.slice(0, 200));
-    return [];
-  }
+/** One recommendation section: heading, a short line on what it is based on, and the product carousel. */
+function RecommendationRow({ id, title, note, items, t, locale, action }: { id: string; title: string; note: string; items: CatalogItem[]; t: Dictionary; locale: Locale; action?: React.ReactNode }) {
+  return (
+    <section aria-labelledby={id} className="mt-10 md:mt-14">
+      <h2 id={id} className="text-[1.35rem] leading-tight font-bold tracking-tight text-ink sm:text-[1.6rem]">
+        {title}
+      </h2>
+      <p className="mt-1 mb-5 text-sm text-muted">{note}</p>
+      <ProductCarousel id={`${id}-track`} label={title} prevLabel={t.home.carouselPrev} nextLabel={t.home.carouselNext} action={action}>
+        {items.map((n) => (
+          <li key={n.id} className={CAROUSEL_ITEM}>
+            <CatalogItemCard item={n} t={t} locale={locale} />
+          </li>
+        ))}
+      </ProductCarousel>
+    </section>
+  );
 }
 
 /**
@@ -60,7 +61,7 @@ export default async function CatalogItemPage({ params }: PageProps<"/[locale]/c
   const t = getDictionary(locale);
   const [item, pharmacy, settings, store] = await Promise.all([getCatalogItem(id, locale), getSelectedPharmacy(locale), getSettings(), getStorefrontState()]);
   if (!item) notFound();
-  const neighbours = await sectionNeighbours(item, locale);
+  const { similar, also } = await productRecommendations(item, locale);
   const href = (p: string) => localizedPath(locale, p);
   // A selected pharmacy without a known phone falls back to the helpline, and says so.
   const pharmacyPhone = pharmacy?.phones[0] ?? null;
@@ -194,30 +195,26 @@ export default async function CatalogItemPage({ params }: PageProps<"/[locale]/c
         </details>
       </div>
 
-      {/* Other products of the same section: a swipeable row with "previous / next" (only real catalogue items). */}
-      {neighbours.length >= 2 && item.category && item.categorySlug ? (
-        <section aria-labelledby="item-more" className="mt-10 md:mt-14">
-          <h2 id="item-more" className="mb-5 text-[1.35rem] leading-tight font-bold tracking-tight text-ink sm:text-[1.6rem]">
-            {fmt(t.items.moreInSection, { section: item.category })}
-          </h2>
-          <ProductCarousel
-            id="item-more-track"
-            label={fmt(t.items.moreInSection, { section: item.category })}
-            prevLabel={t.home.carouselPrev}
-            nextLabel={t.home.carouselNext}
-            action={
+      {/* Recommendations from real catalogue data: similar names, then the same section. Hidden when empty. */}
+      {similar.length ? (
+        <RecommendationRow id="item-similar" title={t.items.similarTitle} note={t.items.similarNote} items={similar} t={t} locale={locale} />
+      ) : null}
+      {also.length && item.category ? (
+        <RecommendationRow
+          id="item-also"
+          title={t.items.alsoTitle}
+          note={fmt(t.items.alsoNote, { section: item.category })}
+          items={also}
+          t={t}
+          locale={locale}
+          action={
+            item.categorySlug ? (
               <ButtonLink href={href(`/catalog/${item.categorySlug}`)} variant="outline" iconRight="chevronRight" wrap className="w-full sm:w-auto">
                 {t.items.sectionAll}
               </ButtonLink>
-            }
-          >
-            {neighbours.map((n) => (
-              <li key={n.id} className={CAROUSEL_ITEM}>
-                <CatalogItemCard item={n} t={t} locale={locale} />
-              </li>
-            ))}
-          </ProductCarousel>
-        </section>
+            ) : undefined
+          }
+        />
       ) : null}
 
       <StickyActionBar targetId="pdp-main-action" label={t.pdp.actionsLabel}>

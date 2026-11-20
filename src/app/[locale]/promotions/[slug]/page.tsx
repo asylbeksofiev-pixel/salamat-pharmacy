@@ -47,6 +47,12 @@ export default async function PromotionPage({ params }: PageProps<"/[locale]/pro
             {p.state === "upcoming" ? <Badge tone="warning">{t.promotions.notStarted}</Badge> : null}
           </div>
           <h1 className="mt-3 text-[1.75rem] leading-tight font-bold tracking-tight sm:text-[2.25rem]">{p.title}</h1>
+          {p.imageUrl ? (
+            <div className="relative mt-5 aspect-[16/9] overflow-hidden rounded-[var(--radius-xl)] border border-line bg-surface">
+              {/* eslint-disable-next-line @next/next/no-img-element -- promotion images: /promo files or allowed https sources set by staff */}
+              <img src={p.imageUrl} alt="" className="absolute inset-0 size-full object-cover" />
+            </div>
+          ) : null}
           {p.state === "ended" ? <Notice tone="warning" className="mt-4">{t.promotions.ended}</Notice> : null}
           {p.description ? <p className="prose-salamat mt-4 whitespace-pre-line">{p.description}</p> : null}
           {p.type === "BONUS" ? <Notice tone="info" className="mt-4">{t.promotions.bonusNote}</Notice> : null}
@@ -61,7 +67,7 @@ export default async function PromotionPage({ params }: PageProps<"/[locale]/pro
           <div>
             <h2 className="font-semibold">{t.promotions.period}</h2>
             <p className="mt-1 text-ink-soft">
-              {fmt(t.promotions.fromDate, { date: formatDate(p.startsAt, locale) })} {p.endsAt ? fmt(t.promotions.until, { date: formatDate(p.endsAt, locale) }) : `· ${t.promotions.noEnd}`}
+              {fmt(t.promotions.fromDate, { date: formatDate(p.startsAt, locale) })} {p.endsAt ? fmt(t.promotions.until, { date: formatDate(p.endsAt, locale) }) : null}
             </p>
           </div>
           <div>
