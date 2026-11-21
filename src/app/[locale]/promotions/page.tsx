@@ -7,6 +7,9 @@ import { Breadcrumbs } from "@/components/ui/Breadcrumbs";
 import { EmptyState, ErrorState } from "@/components/ui/Feedback";
 import { ButtonLink } from "@/components/ui/Button";
 import { PromotionCard, featuredPromotionIndex } from "@/components/catalog/Tiles";
+import { BannerPicture } from "@/components/site/PromoBanners";
+import { PROMO_BANNERS, PROMOTIONS_BANNER_ID } from "@/config/promo-banners";
+import { dataLang } from "@/lib/i18n/config";
 
 export async function generateMetadata({ params }: PageProps<"/[locale]/promotions">) {
   const { locale } = await params;
@@ -31,6 +34,7 @@ export default async function PromotionsPage({ params }: PageProps<"/[locale]/pr
   // Same promotions in the same order; only the most substantial one is shown larger, first.
   const fi = featuredPromotionIndex(promos);
   const first = promos[fi];
+  const banner = PROMO_BANNERS.find((b) => b.id === PROMOTIONS_BANNER_ID) ?? null;
   const rest = promos.filter((_, i) => i !== fi);
   return (
     <div className="container-page py-6 md:py-8">
@@ -54,6 +58,33 @@ export default async function PromotionsPage({ params }: PageProps<"/[locale]/pr
             ))}
           </ul>
         </>
+      ) : banner ? (
+        // No published promotion: the "Акции SALAMAT" banner as a calm placeholder, with an honest message — no
+        // discounts, prices, dates or products are suggested.
+        <section aria-labelledby="promo-none" className="mt-6 overflow-hidden rounded-[var(--radius-2xl)] border border-line bg-white shadow-[var(--shadow-card)]">
+          <span className="relative block aspect-[16/9] w-full overflow-hidden bg-surface lg:aspect-[2/1]">
+            <BannerPicture banner={banner} locale={locale} first />
+          </span>
+          <div className="flex flex-col items-start gap-3 px-5 py-6 sm:px-8 sm:py-8">
+            {banner.caption ? (
+              <p className="text-sm font-semibold text-brand-700" lang={dataLang(locale, banner.caption.title[locale])}>
+                {banner.caption.title[locale]}
+              </p>
+            ) : null}
+            <h2 id="promo-none" className="text-xl leading-tight font-bold text-balance text-ink sm:text-2xl">
+              {t.promotions.noneConfirmed}
+            </h2>
+            <p className="max-w-2xl text-ink-soft">{t.promotions.emptyText}</p>
+            <div className="mt-1 flex flex-wrap gap-3">
+              <ButtonLink href={localizedPath(locale, "/catalog")} variant="outline">
+                {t.common.catalog}
+              </ButtonLink>
+              <ButtonLink href={localizedPath(locale, "/pharmacies")} variant="ghost" icon="pin">
+                {t.common.pharmacies}
+              </ButtonLink>
+            </div>
+          </div>
+        </section>
       ) : (
         <EmptyState
           className="mt-6"

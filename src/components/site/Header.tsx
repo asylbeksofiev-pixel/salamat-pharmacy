@@ -4,7 +4,7 @@ import type { Dictionary, Locale } from "@/lib/i18n";
 import { localizedPath } from "@/lib/i18n";
 import { formatPhone, telHref } from "@/lib/format";
 import { Icon } from "../icons";
-import { SearchBox } from "./SearchBox";
+import { HeaderSearch } from "./SearchBox";
 import { CatalogMenu, HeaderCounters, LanguageSwitcher, MobileMenu, PharmacyChip, type MenuCategory } from "./HeaderParts";
 
 export function Header({ locale, t, categories, helpline, cityName }: { locale: Locale; t: Dictionary; categories: MenuCategory[]; helpline: string; cityName: string }) {
@@ -46,7 +46,7 @@ export function Header({ locale, t, categories, helpline, cityName }: { locale: 
         </Link>
         <CatalogMenu categories={categories} />
         <div className="hidden min-w-0 flex-1 md:block">
-          <SearchBox idPrefix="hdr" />
+          <HeaderSearch idPrefix="hdr" />
         </div>
         <div className="ml-auto hidden xl:block">
           <PharmacyChip />
@@ -56,7 +56,7 @@ export function Header({ locale, t, categories, helpline, cityName }: { locale: 
         </div>
       </div>
       <div className="container-page flex flex-col gap-2 pb-3 md:hidden">
-        <SearchBox idPrefix="mob" />
+        <HeaderSearch idPrefix="mob" />
         <PharmacyChip compact />
       </div>
       <div className="container-page hidden pb-3 md:block xl:hidden">

@@ -10,7 +10,6 @@ import { Pagination } from "../ui/Pagination";
 import { EmptyState, ErrorState, Notice } from "../ui/Feedback";
 import { ButtonLink } from "../ui/Button";
 import { Icon } from "../icons";
-import { CatalogSearchForm } from "./CatalogSearchForm";
 import { DidYouMeanLink } from "./DidYouMeanLink";
 import { ItemFilters, ItemSort, type SectionOption, type SortOption } from "./ItemFilters";
 import { activeFilterCount, catalogQueryString, type CatalogQuery } from "@/lib/catalog-params";
@@ -143,17 +142,6 @@ function sortOptions(t: Dictionary, q: string, cfg: CatalogFiltersConfig): SortO
   return out;
 }
 
-/** Parameters a new search keeps (sections, filters and sort), as [name, value] pairs. */
-function keptParams(query: CatalogQuery): [string, string][] {
-  const out: [string, string][] = query.categories.map((c) => ["category", c]);
-  if (query.priceMin !== undefined) out.push(["priceMin", String(query.priceMin)]);
-  if (query.priceMax !== undefined) out.push(["priceMax", String(query.priceMax)]);
-  if (query.hasPrice) out.push(["hasPrice", "1"]);
-  if (query.hasPhoto) out.push(["hasPhoto", "1"]);
-  if (query.sort && query.sort !== "relevance") out.push(["sort", query.sort]);
-  return out;
-}
-
 const NO_FILTERS: Partial<CatalogQuery> = { categories: [], priceMin: undefined, priceMax: undefined, hasPrice: false, hasPhoto: false };
 
 /** Removable chips for the active filters, plus "Reset filters". Plain links: work without JavaScript. */
@@ -236,10 +224,7 @@ export function CatalogItemsView({
   return (
     <div className="container-page py-6 md:py-8">
       <Breadcrumbs items={crumbs} label={t.common.breadcrumbs} baseUrl={baseUrl} />
-      <h1 className="mt-4 text-[1.75rem] leading-tight font-bold tracking-tight text-ink sm:text-[2.1rem]">{title}</h1>
-      <div className="mt-4">
-        <CatalogSearchForm action={basePath} q={q} keep={keptParams(query)} />
-      </div>
+      <h1 className="mt-4 text-[1.75rem] leading-tight font-bold tracking-tight [overflow-wrap:anywhere] text-ink sm:text-[2.1rem]">{title}</h1>
       {before}
       {failed || !result ? (
         <div className="mt-6">

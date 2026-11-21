@@ -3,14 +3,14 @@
 // suggestions come from /api/search/suggest, results from the server-rendered /search page.
 // An empty focused field shows the recent searches of this browser (SearchHistoryPanel, a group of buttons right after
 // the field: Tab or ↓ reaches it); submitted queries are saved there. Suggestion requests are debounced and the previous one is cancelled, so an old answer never replaces a newer one.
-import { useEffect, useId, useRef, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useEffect, useId, useRef, useState, useTransition } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Icon } from "../icons";
 import { cn } from "../ui/cn";
 import { SearchSubmitLabel } from "./SearchSubmitLabel";
 import { SearchHistoryPanel } from "./SearchHistoryPanel";
 import { useSite } from "./SiteProvider";
-import { fmt } from "@/lib/i18n/config";
+import { fmt, splitLocale } from "@/lib/i18n/config";
 import { searchHistory, useSearchHistory } from "@/lib/client/search-history";
 
 interface Suggestion {
@@ -20,12 +20,61 @@ interface Suggestion {
   href: string;
 }
 
-export function SearchBox({ defaultValue = "", size = "md", autoFocus = false, idPrefix = "search" }: { defaultValue?: string; size?: "md" | "lg"; autoFocus?: boolean; idPrefix?: string }) {
+/** Catalogue listing paths (without the locale prefix) whose own query, filters and sort the header search keeps. */
+const LISTING = /^\/(?:search|catalog)(?:\/(?!item\/)[^/]+)?$/;
+
+/**
+ * The one search field of the site (header). On the catalogue, a section and the search results it shows the current
+ * query, and a new search stays on that page with its sections, filters and sort (the page goes back to 1); elsewhere
+ * it opens /search. The URL is read with useSearchParams inside Suspense; the fallback is the same field without it.
+ */
+export function HeaderSearch({ idPrefix }: { idPrefix: string }) {
+  return (
+    <Suspense fallback={<SearchBox idPrefix={idPrefix} />}>
+      <HeaderSearchWithUrl idPrefix={idPrefix} />
+    </Suspense>
+  );
+}
+
+function HeaderSearchWithUrl({ idPrefix }: { idPrefix: string }) {
+  const pathname = usePathname() || "/";
+  const params = useSearchParams();
+  const listing = LISTING.test(splitLocale(pathname).path);
+  if (!listing) return <SearchBox idPrefix={idPrefix} />;
+  const keep = new URLSearchParams(params.toString());
+  keep.delete("q");
+  keep.delete("page");
+  return <SearchBox idPrefix={idPrefix} query={params.get("q") ?? ""} target={{ path: pathname, keep: keep.toString() }} />;
+}
+
+export function SearchBox({
+  defaultValue = "",
+  query,
+  target,
+  size = "md",
+  autoFocus = false,
+  idPrefix = "search",
+}: {
+  defaultValue?: string;
+  /** The query of the page being shown; the field follows it (back/forward, "did you mean", reload). */
+  query?: string;
+  /** Where a search goes: this listing path with its other parameters; default /search. */
+  target?: { path: string; keep: string };
+  size?: "md" | "lg";
+  autoFocus?: boolean;
+  idPrefix?: string;
+}) {
   const { t, locale, href } = useSite();
   const router = useRouter();
   const uid = useId();
   const listId = `${idPrefix}-${uid}-list`;
-  const [value, setValue] = useState(defaultValue);
+  const [value, setValue] = useState(query ?? defaultValue);
+  // A new query in the URL (another search, Back, a "did you mean" link) replaces the text in the field.
+  const [shownQuery, setShownQuery] = useState(query);
+  if (query !== undefined && query !== shownQuery) {
+    setShownQuery(query);
+    setValue(query);
+  }
   const [result, setResult] = useState<{ q: string; locale: string; items: Suggestion[]; didYouMean: string | null }>();
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(-1);
@@ -94,9 +143,17 @@ export function SearchBox({ defaultValue = "", size = "md", autoFocus = false, i
   /** A submitted search: saved to this browser's history, then the results page opens. */
   const search = (query: string) => {
     const clean = query.trim().slice(0, 100);
-    if (!clean) return;
+    // An empty search on a listing page clears the query there (filters and sort stay); elsewhere it does nothing.
+    if (!clean) {
+      if (target && shownQuery) go(target.keep ? `${target.path}?${target.keep}` : target.path);
+      return;
+    }
     searchHistory.add(clean);
-    go(`${href("/search")}?q=${encodeURIComponent(clean)}`);
+    if (target) {
+      const p = new URLSearchParams(target.keep);
+      p.set("q", clean);
+      go(`${target.path}?${p.toString()}`);
+    } else go(`${href("/search")}?q=${encodeURIComponent(clean)}`);
   };
   const didYouMean = matchingResult && matchingResult.items.length === 0 ? matchingResult.didYouMean : null;
 
@@ -117,7 +174,6 @@ export function SearchBox({ defaultValue = "", size = "md", autoFocus = false, i
         e.preventDefault();
         if (showList && active >= 0 && active < visible.length) return go(visible[active].href);
         if (showList && didYouMean && active === visible.length) return search(didYouMean);
-        if (!q) return;
         search(q);
       }}
     >
@@ -181,7 +237,7 @@ export function SearchBox({ defaultValue = "", size = "md", autoFocus = false, i
           className={cn(
             "w-full rounded-[var(--radius-lg)] border border-line-strong bg-white pr-28 pl-11 text-ink placeholder:text-muted/85",
             "sal-search-input focus:border-brand-600",
-            size === "lg" ? "h-14 text-[1.05rem]" : "h-12 text-[0.98rem]",
+            size === "lg" ? "h-14 text-[1.05rem]" : "h-12 text-base",
           )}
         />
         <button

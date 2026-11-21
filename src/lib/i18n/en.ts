@@ -557,6 +557,7 @@ const en: Dictionary = {
     inPharmacies: "Participating pharmacies: {count}",
     intro: "Offers and bonuses at SALAMAT pharmacies. Terms and dates are on each offer’s page.",
     empty: "There are no current offers right now",
+    noneConfirmed: "There are no confirmed current offers right now. Follow SALAMAT for updates.",
     loadError: "Could not load the offers",
     loadErrorText: "Please refresh the page a little later.",
     emptyText: "We publish only offers whose terms have been confirmed by the pharmacy chain.",

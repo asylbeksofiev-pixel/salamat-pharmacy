@@ -12,7 +12,7 @@ export function EmptyState({ icon = "box", title, text, action, className }: { i
       <span className="grid size-14 place-items-center rounded-full bg-white text-brand-600 shadow-[var(--shadow-card)]">
         <Icon name={icon} size={28} />
       </span>
-      <h2 className="text-lg font-semibold text-ink">{title}</h2>
+      <h2 className="text-lg font-semibold [overflow-wrap:anywhere] text-ink">{title}</h2>
       {text ? <p className="max-w-md text-muted">{text}</p> : null}
       {action ? <div className="mt-2 flex flex-wrap justify-center gap-2">{action}</div> : null}
     </div>
@@ -25,7 +25,7 @@ export function ErrorState({ title, text, action }: { title: ReactNode; text?: R
       <span className="grid size-12 place-items-center rounded-full bg-white text-accent-600">
         <Icon name="alert" size={26} />
       </span>
-      <h2 className="text-lg font-semibold text-ink">{title}</h2>
+      <h2 className="text-lg font-semibold [overflow-wrap:anywhere] text-ink">{title}</h2>
       {text ? <p className="max-w-md text-ink-soft">{text}</p> : null}
       {action}
     </div>

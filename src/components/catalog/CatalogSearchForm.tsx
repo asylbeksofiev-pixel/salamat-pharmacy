@@ -95,7 +95,7 @@ function CatalogSearchField({ action, q, keep }: { action: string; q: string; ke
           maxLength={100}
           enterKeyHint="search"
           placeholder={t.items.searchPlaceholder}
-          className="sal-search-input h-12 w-full rounded-[var(--radius-lg)] border border-line-strong bg-white pr-3 pl-11 text-[0.98rem] placeholder:text-muted/85 focus:border-brand-600"
+          className="sal-search-input h-12 w-full rounded-[var(--radius-lg)] border border-line-strong bg-white pr-3 pl-11 text-base placeholder:text-muted/85 focus:border-brand-600"
         />
         <SearchHistoryPanel
           id={historyId}

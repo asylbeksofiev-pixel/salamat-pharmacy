@@ -22,7 +22,7 @@ import { CatalogItemCard } from "@/components/catalog/CatalogItems";
 import { CAROUSEL_ITEM, ProductCarousel } from "@/components/catalog/ProductCarousel";
 import { ButtonLink } from "@/components/ui/Button";
 import { PromoBanners } from "@/components/site/PromoBanners";
-import { PROMO_BANNERS, visibleBanners } from "@/config/promo-banners";
+import { PROMO_BANNERS } from "@/config/promo-banners";
 import { Icon } from "@/components/icons";
 
 export async function generateMetadata({ params }: PageProps<"/[locale]">) {
@@ -82,7 +82,6 @@ export default async function HomePage({ params }: PageProps<"/[locale]">) {
   const featured = await featuredItems(locale, selected?.id ?? null);
   const href = (p: string) => localizedPath(locale, p);
   const shownPharmacies = selected ? [selected, ...pharmacies.filter((p) => p.id !== selected.id)].slice(0, 6) : pharmacies.slice(0, 6);
-  const services = visibleBanners(PROMO_BANNERS, { promotions: promotions.length > 0 });
 
   return (
     <HomeScrollMotion>
@@ -138,14 +137,14 @@ export default async function HomePage({ params }: PageProps<"/[locale]">) {
         </div>
       </section>
 
-      {/* SALAMAT services: information banners from src/config/promo-banners.ts (public/promo/). They describe services,
-          not offers, so the heading is "SALAMAT services"; a banner marked `requires: "promotions"` is shown only while
-          real promotions are published. Real promotions have their own block below. */}
-      {services.length ? (
+      {/* SALAMAT services: the four information banners from src/config/promo-banners.ts (public/promo/). They describe
+          services, not offers (no discounts, prices or dates), so the heading is "SALAMAT services". Real promotions
+          have their own block below, shown only while published ones exist. */}
+      {PROMO_BANNERS.length ? (
         <section aria-labelledby="h-services" className="container-page pt-10 md:pt-14">
           <SectionTitle id="h-services" title={t.home.servicesTitle} />
           <div data-home-reveal>
-            <PromoBanners banners={services} t={t} locale={locale} label={t.home.servicesTitle} />
+            <PromoBanners banners={PROMO_BANNERS} t={t} locale={locale} label={t.home.servicesTitle} />
           </div>
         </section>
       ) : null}
