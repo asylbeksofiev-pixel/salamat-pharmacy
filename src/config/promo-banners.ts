@@ -10,9 +10,9 @@
 //      text that is written on the image — and, if the banner should lead somewhere, `href`.
 //   3. Commit and push: the banner appears after the next deployment. `npm test` checks that every file exists.
 //
-// While the list is empty the section is not shown. A banner with `requires: "promotions"` (e.g. one that leads to the
-// promotions page) is shown only while at least one real promotion is published. Do not put discounts, prices or dates
-// on a service banner: a real offer is a promotion in the admin panel.
+// While the list is empty the section is not shown. Do not put discounts, prices or dates on a banner: a real offer is a
+// promotion in the admin panel. The "promo-2" banner ("Акции SALAMAT") is also shown on the promotions page while no
+// promotion is published (PROMOTIONS_BANNER_ID).
 import type { Locale } from "@/lib/i18n/config";
 
 /** A path under /public, the same for all languages or one per language (e.g. text on the image). */
@@ -42,8 +42,6 @@ export interface PromoBanner {
     /** Button label; the button leads to `href`. */
     cta: Record<Locale, string>;
   };
-  /** "promotions": show only while real promotions are published (the banner leads to the promotions page). */
-  requires?: "promotions";
 }
 
 /** Image sizes the banners are prepared for (used for layout and image optimisation). */
@@ -83,8 +81,6 @@ export const PROMO_BANNERS: PromoBanner[] = [
       en: "A green card with a pharmacy cross, coins and a gift",
     },
     href: "/promotions",
-    // Leads to the promotions page: shown only while real promotions are published there.
-    requires: "promotions",
     caption: {
       title: { ru: "Акции SALAMAT", kk: "SALAMAT акциялары", en: "SALAMAT offers" },
       text: {
@@ -149,10 +145,8 @@ export const PROMO_BANNERS: PromoBanner[] = [
   // },
 ];
 
-/** Banners to show now: those that need published promotions are left out while there are none. */
-export function visibleBanners(banners: PromoBanner[], state: { promotions: boolean }): PromoBanner[] {
-  return banners.filter((b) => b.requires !== "promotions" || state.promotions);
-}
+/** The "Акции SALAMAT" banner, shown on the promotions page while no promotion is published. */
+export const PROMOTIONS_BANNER_ID = "promo-2";
 
 export function bannerSrc(src: BannerSrc, locale: Locale): string {
   return typeof src === "string" ? src : src[locale];

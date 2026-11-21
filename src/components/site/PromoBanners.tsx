@@ -11,7 +11,7 @@ import { bannerSrc, PROMO_BANNER_SIZE, type PromoBanner } from "@/config/promo-b
 import { PromoCarousel } from "./PromoCarousel";
 import { Icon } from "../icons";
 
-function BannerPicture({ banner, locale, first }: { banner: PromoBanner; locale: Locale; first: boolean }) {
+export function BannerPicture({ banner, locale, first }: { banner: PromoBanner; locale: Locale; first: boolean }) {
   const alt = banner.alt[locale];
   const common = { alt, sizes: "(min-width: 1320px) 1272px, 100vw", quality: 90 };
   const {

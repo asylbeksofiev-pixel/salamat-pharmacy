@@ -32,7 +32,7 @@ export function QuantitySelector({ value, onChange, max, labels, size = "md" }: 
           const n = Number(e.target.value);
           if (Number.isInteger(n) && n >= 1) onChange(Math.min(max, n));
         }}
-        className="w-10 [appearance:textfield] bg-transparent text-center font-semibold outline-none [&::-webkit-inner-spin-button]:appearance-none"
+        className="w-10 [appearance:textfield] bg-transparent text-center text-base font-semibold outline-none [&::-webkit-inner-spin-button]:appearance-none"
       />
       <button type="button" className={cn("grid place-items-center text-ink-soft transition-[color,scale] duration-150 hover:text-brand-700 disabled:opacity-40 motion-safe:active:scale-90", btn)} onClick={() => onChange(value + 1)} disabled={value >= max} aria-label={labels.increase}>
         <Icon name="plus" size={18} />

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { cartSummary } from "@/lib/cart-summary";
 import { pluralWord } from "@/lib/format";
 import { getDictionary } from "@/lib/i18n";
-import { PROMO_BANNERS, visibleBanners } from "@/config/promo-banners";
+import { PROMO_BANNERS, PROMOTIONS_BANNER_ID } from "@/config/promo-banners";
 import { visibilityCandidates } from "../../scripts/catalog-visibility";
 
 describe("cart counters", () => {
@@ -17,11 +17,9 @@ describe("cart counters", () => {
 });
 
 describe("home service banners", () => {
-  it("hide the promotions banner while no promotion is published", () => {
-    const none = visibleBanners(PROMO_BANNERS, { promotions: false });
-    expect(none.some((b) => b.href === "/promotions")).toBe(false);
-    expect(none.length).toBe(PROMO_BANNERS.length - 1);
-    expect(visibleBanners(PROMO_BANNERS, { promotions: true })).toHaveLength(PROMO_BANNERS.length);
+  it("are the four original banners, the promotions one included", () => {
+    expect(PROMO_BANNERS.map((b) => b.id)).toEqual(["promo-1", "promo-2", "promo-3", "promo-4"]);
+    expect(PROMO_BANNERS.find((b) => b.id === PROMOTIONS_BANNER_ID)?.href).toBe("/promotions");
   });
 });
 

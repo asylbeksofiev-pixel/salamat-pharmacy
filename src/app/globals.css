@@ -928,10 +928,22 @@ details[open]::details-content {
   }
 }
 
-/* Guard against sideways page panning on touch screens. No element wider than the viewport was found at 320–768 px
-   (browser emulation, 12 pages), but a briefly wider element (an animation, a long word in content from the database)
-   would let iOS pan the whole page sideways during a vertical swipe. `clip` (unlike `hidden`) creates no scroll
-   container, so sticky headers and bars keep working; carousels scroll inside their own tracks. */
+/* Sideways page movement on phones. Cause found 22.11.2026: the search fields had a 15.68 px font, and iOS Safari zooms
+   the page in when a field under 16 px gets focus — it stays zoomed, so the next vertical swipe also pans the page
+   sideways. Text fields are 16 px now; this rule keeps any future field on a touch screen at 16 px or more (unlayered,
+   so it wins over utility classes). Checkboxes and radio buttons are not affected. */
+@media (pointer: coarse) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  select,
+  textarea {
+    font-size: max(1rem, 16px);
+  }
+}
+
+/* No element is wider than the viewport at 320–768 px (checked in browser emulation, fixed and transformed elements
+   included: everything off-screen sits inside a carousel track). As a guard, the root clips sideways overflow:
+   `clip` (unlike `hidden`) creates no scroll container, so sticky bars keep working and carousels still scroll inside
+   their own tracks. */
 html,
 body {
   overflow-x: clip;
