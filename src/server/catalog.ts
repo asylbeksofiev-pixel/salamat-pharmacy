@@ -394,7 +394,7 @@ export interface Suggestion {
   href: string;
 }
 
-export async function suggest(q: string, locale: Locale): Promise<{ items: Suggestion[]; query: string }> {
+export async function suggest(q: string, locale: Locale): Promise<{ items: Suggestion[]; query: string; didYouMean?: string | null }> {
   const run = async (query: string) => {
     const tokens = tokenize(query);
     if (!tokens.length) return [] as Suggestion[];
@@ -452,5 +452,6 @@ export async function suggest(q: string, locale: Locale): Promise<{ items: Sugge
       if (items.length) query = fixed;
     }
   }
-  return { items, query };
+  // Nothing at all: "Did you mean …?" from the catalogue words (a link in the drop-down, never applied silently).
+  return { items, query, didYouMean: items.length ? null : catalog.didYouMean };
 }

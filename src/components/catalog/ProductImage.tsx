@@ -34,12 +34,19 @@ export function ProductImage({ src, alt, noImageLabel, className, sizes = "(max-
   } catch {
     /* invalid URL */
   }
-  const imgClass = "object-contain p-[8%] transition-transform duration-500 ease-[var(--ease-out-soft)] motion-safe:group-hover:scale-[1.03]";
+  const optimised = (!!host && optimisedHosts.has(host)) || isBlobProductPhoto(src) || isOpenFactsPhotoUrl(src);
+  // The whole package is always visible and never stretched: object-contain keeps the proportions. A photo served as
+  // is (not optimised) uses scale-down, so a small picture is not enlarged into a blur; an optimised one is resized by
+  // next/image to the box. A small inner margin keeps the package off the card edge.
+  const imgClass = cn(
+    optimised ? "object-contain" : "object-scale-down",
+    "p-[5%] transition-transform duration-500 ease-[var(--ease-out-soft)] motion-safe:group-hover:scale-[1.03]",
+  );
   // If the photo fails to load, the same box shows the placeholder instead of a broken-image icon.
   const fallback = <ProductPlaceholder alt={alt} label={noImageLabel} compact={compact} aspect="" radius="" className="absolute inset-0 h-full" />;
   return (
     <div className={cn("relative w-full overflow-hidden bg-white", aspect, radius, className)}>
-      <ProductPhoto src={src} alt={alt} optimised={(!!host && optimisedHosts.has(host)) || isBlobProductPhoto(src) || isOpenFactsPhotoUrl(src)} sizes={sizes} priority={priority} className={imgClass} fallback={fallback} />
+      <ProductPhoto src={src} alt={alt} optimised={optimised} sizes={sizes} priority={priority} className={imgClass} fallback={fallback} />
     </div>
   );
 }

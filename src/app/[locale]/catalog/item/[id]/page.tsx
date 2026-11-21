@@ -3,7 +3,8 @@ import { notFound } from "next/navigation";
 import { dataLang, fmt, getDictionary, isLocale, localizedPath, type Dictionary, type Locale } from "@/lib/i18n";
 import { formatPhone, telHref } from "@/lib/format";
 import { getCatalogItem, isCatalogId, type CatalogItem } from "@/server/catalog-items";
-import { productRecommendations } from "@/server/recommendations";
+import { productRecommendations, type SimilarBasis } from "@/server/recommendations";
+import { nameDetails } from "@/lib/product-features";
 import { getSelectedPharmacy } from "@/server/pharmacies";
 import { getSettings } from "@/server/settings";
 import { pageMetadata } from "@/server/seo";
@@ -61,7 +62,17 @@ export default async function CatalogItemPage({ params }: PageProps<"/[locale]/c
   const t = getDictionary(locale);
   const [item, pharmacy, settings, store] = await Promise.all([getCatalogItem(id, locale), getSelectedPharmacy(locale), getSettings(), getStorefrontState()]);
   if (!item) notFound();
-  const { similar, also } = await productRecommendations(item, locale);
+  const { similar, basis, others } = await productRecommendations(item, locale);
+  // Characteristics read from the product name (shown only when the name really contains them).
+  const details = nameDetails(item.name);
+  const nameRows: { label: string; value: string }[] = [
+    ...(details.form ? [{ label: t.product.form, value: t.product.forms[details.form] }] : []),
+    ...(details.dosages.length ? [{ label: t.product.dosage, value: details.dosages.join(", ") }] : []),
+    ...(details.contents.length ? [{ label: t.product.volume, value: details.contents.join(", ") }] : []),
+    ...(details.count !== null ? [{ label: t.product.packageSize, value: fmt(t.product.packCountValue, { count: details.count }) }] : []),
+  ];
+  const similarNote = (b: SimilarBasis | null) =>
+    b === "name" ? t.items.similarNoteName : b === "brand" ? fmt(t.items.similarNoteBrand, { section: item.category ?? "" }) : fmt(t.items.similarNoteType, { section: item.category ?? "" });
   const href = (p: string) => localizedPath(locale, p);
   // A selected pharmacy without a known phone falls back to the helpline, and says so.
   const pharmacyPhone = pharmacy?.phones[0] ?? null;
@@ -108,7 +119,7 @@ export default async function CatalogItemPage({ params }: PageProps<"/[locale]/c
 
         <section aria-labelledby="item-title" className="flex min-w-0 flex-col">
           {item.category && item.categorySlug ? (
-            <Link href={href(`/catalog/${item.categorySlug}`)} className="mb-1 self-start text-sm font-semibold text-brand-700 hover:underline">
+            <Link href={href(`/catalog/${item.categorySlug}`)} className="inline-flex min-h-11 items-center self-start text-sm font-semibold text-brand-700 hover:underline md:mb-1 md:min-h-0">
               {item.category}
             </Link>
           ) : null}
@@ -187,24 +198,32 @@ export default async function CatalogItemPage({ params }: PageProps<"/[locale]/c
                 <dd className="break-words text-ink">{item.category}</dd>
               </div>
             ) : null}
+            {nameRows.map((r) => (
+              <div key={r.label} className="grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-4 border-t border-line/70 py-2.5 first:border-t-0">
+                <dt className="text-muted">{r.label}</dt>
+                <dd className="break-words text-ink">{r.value}</dd>
+              </div>
+            ))}
             <div className="grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-4 border-t border-line/70 py-2.5 first:border-t-0">
               <dt className="text-muted">{t.checkout.method}</dt>
               <dd className="text-ink">{t.checkout.pickup}</dd>
             </div>
           </dl>
+          {nameRows.length ? <p className="pb-4 text-xs text-muted">{t.product.fromName}</p> : null}
         </details>
       </div>
 
-      {/* Recommendations from real catalogue data: similar names, then the same section. Hidden when empty. */}
+      {/* Recommendations from real catalogue data (src/server/recommendations.ts): products that share the type, brand
+          or name, then other products of the section under a neutral heading. Each section is hidden when empty. */}
       {similar.length ? (
-        <RecommendationRow id="item-similar" title={t.items.similarTitle} note={t.items.similarNote} items={similar} t={t} locale={locale} />
+        <RecommendationRow id="item-similar" title={t.items.similarTitle} note={similarNote(basis)} items={similar} t={t} locale={locale} />
       ) : null}
-      {also.length && item.category ? (
+      {others.length && item.category ? (
         <RecommendationRow
-          id="item-also"
-          title={t.items.alsoTitle}
-          note={fmt(t.items.alsoNote, { section: item.category })}
-          items={also}
+          id="item-others"
+          title={t.items.othersTitle}
+          note={fmt(t.items.othersNote, { section: item.category })}
+          items={others}
           t={t}
           locale={locale}
           action={

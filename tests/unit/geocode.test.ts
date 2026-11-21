@@ -18,6 +18,21 @@ afterEach(() => {
 });
 
 describe("address geocoding for the nearest pharmacy", () => {
+  it("returns several different places for the visitor to choose; near-duplicates are merged", async () => {
+    vi.stubGlobal(
+      "fetch",
+      respond([
+        { lat: "51.1656", lon: "71.4330", display_name: "40, улица Кенесары, Астана" },
+        { lat: "51.1657", lon: "71.4331", display_name: "Кенесары 40, подъезд 2, Астана" },
+        { lat: "51.0900", lon: "71.4200", display_name: "40, улица Кенесары, Косшы" },
+        { lat: "43.2380", lon: "76.8890", display_name: "Кенесары 40, Алматы" },
+      ]),
+    );
+    const { geocodeCandidates } = await load({ YANDEX_GEOCODER_API_KEY: "", YANDEX_SUGGEST_API_KEY: "", GEOCODER: "" });
+    const list = await geocodeCandidates("Кенесары 40 (несколько)", "ru");
+    expect(list.map((p) => p.label)).toEqual(["40, улица Кенесары, Астана", "40, улица Кенесары, Косшы"]);
+  });
+
   it("uses OpenStreetMap Nominatim without a key, inside the Astana area only", async () => {
     const fetchMock = respond([{ lat: "51.1656", lon: "71.4330", display_name: "40, улица Кенесары, Астана" }]);
     vi.stubGlobal("fetch", fetchMock);

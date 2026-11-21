@@ -648,6 +648,25 @@ model CatalogItemCategory {
   @@map("catalog_item_categories")
 }
 
+/// Public visibility of a catalogue product (public.pharmacy_products.id). No row means public: that is the default
+/// for every existing and new product. A row with is_public = false hides the product from search, listings,
+/// carousels, recommendations, favourites, the product page, the catalogue API, the cart and requests.
+/// Rows are written only on a decision by SALAMAT staff (scripts/catalog-visibility.ts); un-hiding sets is_public back
+/// to true and keeps who decided and why.
+model CatalogItemVisibility {
+  productId BigInt   @id @map("product_id")
+  isPublic  Boolean  @default(true) @map("is_public")
+  /// Why the product is hidden or shown again, e.g. "внутренняя комплектующая, подтвердил(а) …".
+  reason    String
+  /// Who decided: a name or role at SALAMAT.
+  decidedBy String   @map("decided_by")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([isPublic])
+  @@map("catalog_item_visibility")
+}
+
 /// One automatic classification run (apply) or its rollback; stats hold the counts reported by the script.
 model CatalogClassificationRun {
   id                String    @id @default(cuid())

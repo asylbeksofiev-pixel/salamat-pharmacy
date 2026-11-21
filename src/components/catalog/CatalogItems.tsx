@@ -11,6 +11,7 @@ import { EmptyState, ErrorState, Notice } from "../ui/Feedback";
 import { ButtonLink } from "../ui/Button";
 import { Icon } from "../icons";
 import { CatalogSearchForm } from "./CatalogSearchForm";
+import { DidYouMeanLink } from "./DidYouMeanLink";
 import { ItemFilters, ItemSort, type SectionOption, type SortOption } from "./ItemFilters";
 import { activeFilterCount, catalogQueryString, type CatalogQuery } from "@/lib/catalog-params";
 import { CatalogCartButton, FavoriteButton } from "./OfferActions";
@@ -293,6 +294,17 @@ export function CatalogItemsView({
               <Notice tone="info" className="mt-3">
                 {fmt(t.search.layoutFixed, { q: result.query })}
               </Notice>
+            ) : null}
+            {/* "Did you mean …?" — a link; the visitor's own query and its results stay as they are. */}
+            {result.suggestion ? (
+              <p className="mt-3 rounded-[var(--radius-md)] border border-brand-100 bg-brand-50 px-3.5 py-2.5 text-[0.95rem] text-ink" data-testid="did-you-mean">
+                {t.search.didYouMean}{" "}
+                <DidYouMeanLink
+                  href={basePath + catalogQueryString({ ...query, q: result.suggestion.query }, { page: 1 })}
+                  query={result.suggestion.query}
+                  label={fmt(t.search.didYouMeanLink, { q: result.suggestion.query })}
+                />
+              </p>
             ) : null}
             {!filters?.pricesAvailable ? (
               <Notice tone="info" className="mt-3">

@@ -1,13 +1,17 @@
 "use client";
 // Search with suggestions (ARIA combobox). The catalogue is never loaded into the browser:
 // suggestions come from /api/search/suggest, results from the server-rendered /search page.
+// An empty focused field shows the recent searches of this browser (SearchHistoryPanel, a group of buttons right after
+// the field: Tab or ↓ reaches it); submitted queries are saved there. Suggestion requests are debounced and the previous one is cancelled, so an old answer never replaces a newer one.
 import { useEffect, useId, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Icon } from "../icons";
 import { cn } from "../ui/cn";
 import { SearchSubmitLabel } from "./SearchSubmitLabel";
+import { SearchHistoryPanel } from "./SearchHistoryPanel";
 import { useSite } from "./SiteProvider";
 import { fmt } from "@/lib/i18n/config";
+import { searchHistory, useSearchHistory } from "@/lib/client/search-history";
 
 interface Suggestion {
   type: "variant" | "category";
@@ -22,33 +26,45 @@ export function SearchBox({ defaultValue = "", size = "md", autoFocus = false, i
   const uid = useId();
   const listId = `${idPrefix}-${uid}-list`;
   const [value, setValue] = useState(defaultValue);
-  const [result, setResult] = useState<{ q: string; locale: string; items: Suggestion[] }>();
+  const [result, setResult] = useState<{ q: string; locale: string; items: Suggestion[]; didYouMean: string | null }>();
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(-1);
   const [pending, startTransition] = useTransition();
   const wrap = useRef<HTMLFormElement>(null);
+  const input = useRef<HTMLInputElement>(null);
+  const history = useSearchHistory();
+  const historyId = `${idPrefix}-${uid}-history`;
   const q = value.trim();
   const showList = open && q.length >= 2;
+  const showHistory = open && q.length === 0 && history.length > 0;
+  // Escape returns focus to the field: that focus must not reopen the history (a click or typing does).
+  const keepClosed = useRef(false);
+  const closeHistory = () => {
+    keepClosed.current = true;
+    setOpen(false);
+  };
   const matchingResult = result?.q === q && result.locale === locale ? result : undefined;
   const visible = matchingResult?.items ?? [];
-  const total = visible.length + 1; // + "all results"
+  const total = visible.length + 1 + (matchingResult && matchingResult.items.length === 0 && matchingResult.didYouMean ? 1 : 0); // + "did you mean" + "all results"
 
   useEffect(() => {
     if (!showList) return;
     const ctrl = new AbortController();
     const timer = setTimeout(async () => {
       let items: Suggestion[] = [];
+      let didYouMean: string | null = null;
       try {
         const res = await fetch(`/api/search/suggest?q=${encodeURIComponent(q.slice(0, 100))}&locale=${locale}`, { signal: ctrl.signal });
         if (res.ok) {
-          const data = (await res.json()) as { items: Suggestion[] };
+          const data = (await res.json()) as { items: Suggestion[]; didYouMean?: string | null };
           items = data.items;
+          didYouMean = typeof data.didYouMean === "string" && data.didYouMean ? data.didYouMean : null;
         }
       } catch {
         /* aborted or offline */
       }
       if (ctrl.signal.aborted) return;
-      setResult({ q, locale, items });
+      setResult({ q, locale, items, didYouMean });
       setActive(-1);
     }, 220);
     return () => {
@@ -58,7 +74,7 @@ export function SearchBox({ defaultValue = "", size = "md", autoFocus = false, i
   }, [q, locale, showList]);
 
   useEffect(() => {
-    if (!showList) return;
+    if (!showList && !showHistory) return;
     const onDoc = (e: PointerEvent) => {
       if (wrap.current && !wrap.current.contains(e.target as Node)) {
         setOpen(false);
@@ -67,7 +83,7 @@ export function SearchBox({ defaultValue = "", size = "md", autoFocus = false, i
     };
     document.addEventListener("pointerdown", onDoc);
     return () => document.removeEventListener("pointerdown", onDoc);
-  }, [showList]);
+  }, [showList, showHistory]);
 
   const go = (url: string) => {
     if (pending) return;
@@ -75,6 +91,14 @@ export function SearchBox({ defaultValue = "", size = "md", autoFocus = false, i
     setActive(-1);
     startTransition(() => router.push(url));
   };
+  /** A submitted search: saved to this browser's history, then the results page opens. */
+  const search = (query: string) => {
+    const clean = query.trim().slice(0, 100);
+    if (!clean) return;
+    searchHistory.add(clean);
+    go(`${href("/search")}?q=${encodeURIComponent(clean)}`);
+  };
+  const didYouMean = matchingResult && matchingResult.items.length === 0 ? matchingResult.didYouMean : null;
 
   return (
     <form
@@ -92,8 +116,9 @@ export function SearchBox({ defaultValue = "", size = "md", autoFocus = false, i
       onSubmit={(e) => {
         e.preventDefault();
         if (showList && active >= 0 && active < visible.length) return go(visible[active].href);
+        if (showList && didYouMean && active === visible.length) return search(didYouMean);
         if (!q) return;
-        go(`${href("/search")}?q=${encodeURIComponent(q.slice(0, 100))}`);
+        search(q);
       }}
     >
       <label htmlFor={`${idPrefix}-${uid}`} className="sr-only">
@@ -113,6 +138,7 @@ export function SearchBox({ defaultValue = "", size = "md", autoFocus = false, i
           autoComplete="off"
           enterKeyHint="search"
           maxLength={100}
+          ref={input}
           autoFocus={autoFocus}
           value={value}
           placeholder={t.header.searchPlaceholder}
@@ -121,8 +147,22 @@ export function SearchBox({ defaultValue = "", size = "md", autoFocus = false, i
             setActive(-1);
             setOpen(true);
           }}
-          onFocus={() => setOpen(true)}
+          onFocus={() => {
+            if (keepClosed.current) keepClosed.current = false;
+            else setOpen(true);
+          }}
+          onClick={() => setOpen(true)}
           onKeyDown={(e) => {
+            if (showHistory && e.key === "ArrowDown") {
+              e.preventDefault();
+              wrap.current?.querySelector<HTMLButtonElement>("[data-history-query]")?.focus();
+              return;
+            }
+            if (showHistory && e.key === "Escape") {
+              e.preventDefault();
+              closeHistory();
+              return;
+            }
             if (q.length < 2) return;
             if (e.key === "ArrowDown") {
               e.preventDefault();
@@ -149,7 +189,7 @@ export function SearchBox({ defaultValue = "", size = "md", autoFocus = false, i
           aria-busy={pending || undefined}
           className={cn(
             "sal-search-submit absolute top-1/2 right-1.5 -translate-y-1/2 rounded-[var(--radius-md)] bg-brand-600 px-4 font-semibold text-white hover:bg-brand-700",
-            size === "lg" ? "h-11" : "h-9 text-sm",
+            size === "lg" ? "h-11" : "h-11 min-w-11 text-sm",
           )}
         >
           <SearchSubmitLabel pending={pending}>{t.header.searchSubmit}</SearchSubmitLabel>
@@ -180,20 +220,47 @@ export function SearchBox({ defaultValue = "", size = "md", autoFocus = false, i
               </span>
             </li>
           ))}
+          {didYouMean ? (
+            <li
+              id={`${listId}-${visible.length}`}
+              role="option"
+              aria-selected={active === visible.length}
+              aria-label={`${t.search.didYouMean} ${didYouMean}`}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => search(didYouMean)}
+              onMouseEnter={() => setActive(visible.length)}
+              className={cn("flex cursor-pointer items-center gap-3 px-4 py-2.5 transition-colors", active === visible.length && "bg-brand-50")}
+            >
+              <Icon name="search" size={18} className="shrink-0 text-muted" />
+              <span className="min-w-0 truncate text-[0.95rem] text-ink">
+                {t.search.didYouMean} <span className="font-semibold text-brand-700">{didYouMean}</span>
+              </span>
+            </li>
+          ) : null}
           <li
-            id={`${listId}-${visible.length}`}
+            id={`${listId}-${total - 1}`}
             role="option"
-            aria-selected={active === visible.length}
+            aria-selected={active === total - 1}
             onMouseDown={(e) => e.preventDefault()}
-            onClick={() => go(`${href("/search")}?q=${encodeURIComponent(q.slice(0, 100))}`)}
-            onMouseEnter={() => setActive(visible.length)}
-            className={cn("flex cursor-pointer items-center gap-3 border-t border-line px-4 py-2.5 font-semibold text-brand-700 transition-colors", active === visible.length && "bg-brand-50")}
+            onClick={() => search(q)}
+            onMouseEnter={() => setActive(total - 1)}
+            className={cn("flex cursor-pointer items-center gap-3 border-t border-line px-4 py-2.5 font-semibold text-brand-700 transition-colors", active === total - 1 && "bg-brand-50")}
           >
             <Icon name="chevronRight" size={18} className="shrink-0" />
             <span className="truncate">{fmt(t.search.allResults, { q: q.slice(0, 60) })}</span>
           </li>
         </ul>
       </div>
+      <SearchHistoryPanel
+        id={historyId}
+        open={showHistory}
+        inputRef={input}
+        onPick={(query) => {
+          setValue(query);
+          search(query);
+        }}
+        onClose={closeHistory}
+      />
     </form>
   );
 }

@@ -13,6 +13,7 @@ const paths = {
   chevronRight: <path d="m9.5 6 6 6-6 6" />,
   chevronLeft: <path d="m14.5 6-6 6 6 6" />,
   chevronDown: <path d="m6 9.5 6 6 6-6" />,
+  chevronUp: <path d="m6 14.5 6-6 6 6" />,
   grid: <><rect x="4" y="4" width="6.5" height="6.5" rx="1.5" /><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.5" /><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.5" /><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.5" /></>,
   filter: <><path d="M4 6h16" /><path d="M7 12h10" /><path d="M10 18h4" /></>,
   sort: <><path d="M7 5v14" /><path d="m4 8 3-3 3 3" /><path d="M17 19V5" /><path d="m14 16 3 3 3-3" /></>,

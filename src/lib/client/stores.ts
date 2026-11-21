@@ -12,7 +12,7 @@ export interface CartLine {
   addedAt: number;
 }
 
-function createStore<T>(key: string, validate: (v: unknown) => T, empty: T) {
+export function createStore<T>(key: string, validate: (v: unknown) => T, empty: T) {
   let cache: T | null = null;
   const listeners = new Set<() => void>();
   const read = (): T => {
@@ -101,9 +101,15 @@ export function useCart(): CartLine[] {
   return useSyncExternalStore(cart.subscribe, cart.read, () => EMPTY_CART);
 }
 
+/** Number of positions (different products) in the cart. */
 export function useCartCount(): number {
   const lines = useCart();
   return lines.length;
+}
+
+/** Positions (different products) and units (sum of quantities) in the cart: "1 позиция · 2 шт.". */
+export function cartTotals(lines: CartLine[]): { positions: number; units: number } {
+  return { positions: lines.length, units: lines.reduce((sum, l) => sum + l.quantity, 0) };
 }
 
 const EMPTY_FAV: string[] = [];

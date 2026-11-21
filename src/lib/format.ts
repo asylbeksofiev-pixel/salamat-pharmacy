@@ -44,3 +44,15 @@ export function formatPhone(e164: string): string {
 export function telHref(e164: string): string {
   return `tel:${e164.replace(/[^\d+]/g, "")}`;
 }
+
+/**
+ * Picks the plural form for `n` from "форма1|форма2|форма3" (Russian: one|few|many), "item|items" (English: one|other)
+ * or a single form (Kazakh nouns do not change after numbers).
+ */
+export function pluralWord(n: number, forms: string, locale: Locale): string {
+  const list = forms.split("|");
+  if (list.length === 1) return list[0];
+  const cat = new Intl.PluralRules(localeTags[locale]).select(n);
+  if (list.length === 2) return cat === "one" ? list[0] : list[1];
+  return cat === "one" ? list[0] : cat === "few" ? list[1] : list[2];
+}

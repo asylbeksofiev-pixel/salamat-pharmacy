@@ -927,3 +927,12 @@ details[open]::details-content {
     transition: none;
   }
 }
+
+/* Guard against sideways page panning on touch screens. No element wider than the viewport was found at 320–768 px
+   (browser emulation, 12 pages), but a briefly wider element (an animation, a long word in content from the database)
+   would let iOS pan the whole page sideways during a vertical swipe. `clip` (unlike `hidden`) creates no scroll
+   container, so sticky headers and bars keep working; carousels scroll inside their own tracks. */
+html,
+body {
+  overflow-x: clip;
+}
