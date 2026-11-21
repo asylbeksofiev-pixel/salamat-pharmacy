@@ -76,6 +76,57 @@ describe("catalogue classification rules", () => {
     }
   });
 
+  // Errors seen on the site (2026-11-21): "р-р" means "размер" (size) in nappies, pants, pacifiers and belts, not
+  // "раствор"; sugar-free dragée sweets are confectionery, not a dosage form.
+  it("reads «р-р» as a size for nappies, pants, pacifiers and supports, not as a solution", () => {
+    expect(cat("Altyn Bala  Подгузники р-р L (9 -14кг) 48 шт")).toBe("mama-i-malysh");
+    expect(cat("Altyn Bala Трусики р-р ХХL (15кг+) 36 шт")).toBe("mama-i-malysh");
+    expect(cat("Tomiko Подгузник Comfort+ р-р Nb 2-5 кг № 21")).toBe("mama-i-malysh");
+    expect(cat("Хаггис Трусики-Подгузн.д/плавания р-р 3-4 (7-15 кг) № 13")).toBe("mama-i-malysh");
+    expect(cat("Молфикс(Molfix) Трусы одноразовые д/плавания р-р 4-5 № 11")).toBe("mama-i-malysh");
+    expect(cat("НИП (NIP) Соска-пустышка Butterfly силикон р-р 3 (16-32 мес)")).toBe("mama-i-malysh");
+    expect(cat("Депенд Нижнее белье для женщин р-р L/XL 9 шт")).toBe("gigiena");
+    expect(cat("Корректоры осанки  р-р 1 01914")).toBe("medicinskie-pribory-i-izdeliya");
+    expect(cat("Ремед Пояс поддерживающий с ребрами жесткости р-р REMED XL R3205")).toBe("medicinskie-pribory-i-izdeliya");
+    // still a solution where it really is one
+    expect(cat("Левомицетин 1 % 10 мл р-р Фармация")).toBe("lekarstvennye-sredstva");
+    expect(cat("Папаверина гидрохлорид р-р для иньекций 2% 2 мл № 10 БЗМП")).toBe("lekarstvennye-sredstva");
+    expect(cat("Роцефин порошок для иньекций 1 гр + 3,5 мл 1% р-р лидокаина № 1")).toBe("lekarstvennye-sredstva");
+    // adult and menstrual pants are hygiene; postpartum pants are for the mother, like postpartum pads
+    expect(cat("Seni Super Medium 2 Подгузники для взрослых № 10 189/536/352")).toBe("gigiena");
+    expect(cat("Котекс Трусы послеродовые р-р L/XL 8 шт")).toBe("mama-i-malysh");
+    expect(cat("Aiwina Трусики менструальные L/XL 3шт")).toBe("gigiena");
+  });
+
+  it("treats sweets sold by weight as food, while medicinal dragées and lozenges stay medicines", () => {
+    expect(cat("Afee Драже без сахара 20 гр Клубника")).toBe("pravilnoe-pitanie");
+    expect(cat("Yumearth Драже органические фруктовые 40 гр")).toBe("pravilnoe-pitanie");
+    expect(cat("АГУША Пастилки фруктовое Яблоко 12 гр")).toBe("mama-i-malysh");
+    expect(cat("Nut Vinograd детские пастилки из фруктов Вишня 40 гр")).toBe("mama-i-malysh");
+    expect(cat("Карсил драже № 80")).toBe("lekarstvennye-sredstva");
+    expect(cat("Курантил драже 25 мг № 120")).toBe("lekarstvennye-sredstva");
+    expect(cat("Аджисепт с Медом пастилки № 24")).toBe("lekarstvennye-sredstva");
+  });
+
+  it("fixes other section errors found in the same check", () => {
+    // contact lens care is not a medicine
+    expect(cat("Раствор для линз Реню Мультиплюс 360 мл")).toBe("medicinskie-pribory-i-izdeliya");
+    // dental plaque indicator tablets are oral care
+    expect(cat("Plack Test Таблетки для индикации зубного налета № 12")).toBe("uhod-za-polostyu-rta");
+    // laundry products: hygiene, or "mother and baby" when made for children's clothes
+    expect(cat("YokoSun (ЙокоСан) Гель для стирки Горный эдельвейс 1 литр")).toBe("gigiena");
+    expect(cat("Tomiko Гель для стирки Color д/цветных тканей 1 литр")).toBe("gigiena");
+    expect(cat("Биолан Жидкость для стирки детского белья 750 мл 028")).toBe("mama-i-malysh");
+    // infusions and prefilled syringes with a solution are medicines; infusion sets stay devices
+    expect(cat("Оликлиномель N7 эмульсия для инфузий 1000 ЕД 1500 мл № 4")).toBe("lekarstvennye-sredstva");
+    expect(cat("Катенокс готовый шприц раствор для инъекций 4000 анти-Ха МЕ/0,4 мл № 10")).toBe("lekarstvennye-sredstva");
+    expect(cat("Система для инфузий Vogt Medical")).toBe("medicinskie-pribory-i-izdeliya");
+    expect(cat("Шприц 5 мл 3-х компонентный № 100")).toBe("medicinskie-pribory-i-izdeliya");
+        // supplement brand lines written with an apostrophe
+    expect(cat("Nature's Bounty L-Лизин 1000 мг таблетки № 60")).toBe("vitaminy-i-bady");
+    expect(cat("Animal Parade для иммунитета детей таблетки жевательные № 90")).toBe("vitaminy-i-bady");
+  });
+
   it("is deterministic", () => {
     const name = "Биодерма (Bioderma) Atoderm Масло для душа 500 мл";
     expect(classifyName(name)).toEqual(classifyName(name));

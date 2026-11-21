@@ -7,7 +7,8 @@ import { getCategoryTree } from "@/server/catalog";
 import { getPharmacies, getSelectedPharmacy, routeLinks } from "@/server/pharmacies";
 import { getActivePromotions } from "@/server/promotions";
 import { featuredItems } from "@/server/products";
-import { listCatalogPreview, type CatalogItem } from "@/server/catalog-items";
+import type { CatalogItem } from "@/server/catalog-items";
+import { homeCatalogSelection } from "@/server/home-catalog";
 import { getSettings } from "@/server/settings";
 import { getStorefrontState } from "@/server/storefront";
 import { CatalogSearchForm } from "@/components/catalog/CatalogSearchForm";
@@ -21,7 +22,7 @@ import { CatalogItemCard } from "@/components/catalog/CatalogItems";
 import { CAROUSEL_ITEM, ProductCarousel } from "@/components/catalog/ProductCarousel";
 import { ButtonLink } from "@/components/ui/Button";
 import { PromoBanners } from "@/components/site/PromoBanners";
-import { PROMO_BANNERS } from "@/config/promo-banners";
+import { PROMO_BANNERS, visibleBanners } from "@/config/promo-banners";
 import { Icon } from "@/components/icons";
 
 export async function generateMetadata({ params }: PageProps<"/[locale]">) {
@@ -45,10 +46,13 @@ function SectionTitle({ id, title, action, text }: { id: string; title: string; 
   );
 }
 
-/** Catalogue preview for the home page; on a database error the section still leads to the catalogue. */
+/**
+ * Varied catalogue selection for the home page (src/config/home-catalog.ts); on a database error the section still
+ * leads to the catalogue.
+ */
 async function catalogPreview(locale: Locale): Promise<CatalogItem[]> {
   try {
-    return await listCatalogPreview(12, locale);
+    return await homeCatalogSelection(locale);
   } catch (e) {
     console.error("catalog preview failed", (e as Error).message.slice(0, 200));
     return [];
@@ -78,6 +82,7 @@ export default async function HomePage({ params }: PageProps<"/[locale]">) {
   const featured = await featuredItems(locale, selected?.id ?? null);
   const href = (p: string) => localizedPath(locale, p);
   const shownPharmacies = selected ? [selected, ...pharmacies.filter((p) => p.id !== selected.id)].slice(0, 6) : pharmacies.slice(0, 6);
+  const services = visibleBanners(PROMO_BANNERS, { promotions: promotions.length > 0 });
 
   return (
     <HomeScrollMotion>
@@ -133,23 +138,17 @@ export default async function HomePage({ params }: PageProps<"/[locale]">) {
         </div>
       </section>
 
-      {/* Offers and discounts: banners from src/config/promo-banners.ts (public/promo/); a neutral placeholder until
-          the real banners are added. */}
-      <section aria-labelledby="h-offers" className="container-page pt-10 md:pt-14">
-        <SectionTitle
-          id="h-offers"
-          title={t.home.promoTitle}
-          action={
-            <Link href={href("/promotions")} className="inline-flex min-h-11 shrink-0 items-center gap-1 text-sm font-semibold text-brand-700 hover:underline">
-              {t.common.showAll}
-              <Icon name="chevronRight" size={16} />
-            </Link>
-          }
-        />
-        <div data-home-reveal>
-          <PromoBanners banners={PROMO_BANNERS} t={t} locale={locale} />
-        </div>
-      </section>
+      {/* SALAMAT services: information banners from src/config/promo-banners.ts (public/promo/). They describe services,
+          not offers, so the heading is "SALAMAT services"; a banner marked `requires: "promotions"` is shown only while
+          real promotions are published. Real promotions have their own block below. */}
+      {services.length ? (
+        <section aria-labelledby="h-services" className="container-page pt-10 md:pt-14">
+          <SectionTitle id="h-services" title={t.home.servicesTitle} />
+          <div data-home-reveal>
+            <PromoBanners banners={services} t={t} locale={locale} label={t.home.servicesTitle} />
+          </div>
+        </section>
+      ) : null}
 
       {/* Catalogue: a few real products (stable order, not "popular") and the way into the full catalogue. */}
       <section aria-labelledby="h-cat" className="container-page py-12 md:py-16">
@@ -285,7 +284,7 @@ export default async function HomePage({ params }: PageProps<"/[locale]">) {
           id="h-ph"
           title={t.home.pharmaciesTitle}
           action={
-            <Link href={href("/pharmacies")} className="inline-flex items-center gap-1 text-sm font-semibold text-brand-700 hover:underline">
+            <Link href={href("/pharmacies")} className="inline-flex min-h-11 items-center gap-1 text-sm font-semibold text-brand-700 hover:underline">
               {t.home.pharmaciesAll} ({pharmacies.length})
               <Icon name="chevronRight" size={16} />
             </Link>

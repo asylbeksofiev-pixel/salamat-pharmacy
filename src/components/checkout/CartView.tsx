@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
-import { cartStore } from "@/lib/client/stores";
+import { cartSummary } from "@/lib/cart-summary";
+import { cartStore, cartTotals } from "@/lib/client/stores";
 import { dataLang, fmt } from "@/lib/i18n/config";
 import { formatKzt } from "@/lib/format";
 import type { Dictionary, Locale } from "@/lib/i18n";
@@ -208,7 +209,7 @@ export function CartView() {
         <aside className="flex flex-col gap-4 self-start lg:sticky lg:top-36">
           <div className="rounded-[var(--radius-xl)] border border-line bg-white p-5 shadow-[var(--shadow-card)] sm:p-6">
             <h2 className="text-lg font-semibold">{t.request.summary}</h2>
-            <p className="mt-0.5 text-sm text-muted">{fmt(t.request.positions, { count: lines.length })}</p>
+            <p className="mt-0.5 text-sm text-muted" data-testid="cart-summary">{cartSummary(t, locale, cartTotals(lines))}</p>
             <p className="mt-4 mb-2 text-sm font-semibold text-ink">{t.cart.pharmacy}</p>
             <PharmacyChip compact />
             {!pharmacy ? <p className="mt-2 text-sm text-warn-700">{t.request.choosePharmacy}</p> : null}

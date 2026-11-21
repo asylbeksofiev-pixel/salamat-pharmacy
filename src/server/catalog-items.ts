@@ -13,9 +13,14 @@ import "server-only";
 // Price source: the network-wide price in pharmacy_products.price (when that column exists). The same value is
 // shown on cards, used by the price filter and by price sorting. A missing or non-positive price means "price to be
 // confirmed" — never 0 ₸: such products stay in the catalogue, are excluded by any price filter, and sort last.
+//
+// Public visibility: catalog_item_visibility (no row = public). A product with is_public = false is left out of
+// every public query here — listings, search, suggestions, counts, the home selection, recommendations, favourites,
+// the product page and API, the cart quote and requests (they read products through these functions).
 import { Prisma } from "@prisma/client";
 import { prisma } from "./db";
 import { escapeLike, fixKeyboardLayout } from "@/lib/search-normalize";
+import { buildVocabulary, suggestCorrection, type Vocabulary } from "@/lib/search-suggest";
 import { categoryName, type Locale } from "@/lib/i18n";
 import { effectiveSort, type CatalogSort } from "@/lib/catalog-params";
 
@@ -54,6 +59,8 @@ export interface CatalogListOptions extends CatalogFilterInput {
   pageSize?: number;
   sort?: CatalogSort | null;
   locale?: Locale;
+  /** Look for a "did you mean" correction when little is found (default true). */
+  suggest?: boolean;
 }
 
 export interface CatalogPage {
@@ -67,6 +74,11 @@ export interface CatalogPage {
   layoutFixed: boolean;
   /** Sort applied (unavailable choices fall back to the default). */
   sort: CatalogSort;
+  /**
+   * "Did you mean …?": a corrected query (typo or keyboard layout) that finds more products, offered as a link when
+   * the query found nothing or very little. The visitor's query itself is never replaced by it.
+   */
+  suggestion: { query: string; total: number } | null;
 }
 
 // ---------- tables, optional columns ----------
@@ -77,8 +89,11 @@ const JOINS = Prisma.raw(
   `LEFT JOIN "public"."catalog_images" ci ON ci."barcode" = btrim(p."article")
    LEFT JOIN "public"."catalog_photo_results" cpr ON cpr."product_id" = p."id" AND cpr."review_status" = 'published'
    LEFT JOIN "public"."catalog_item_categories" cic ON cic."product_id" = p."id" AND cic."review_status" IN ('auto', 'confirmed')
-   LEFT JOIN "public"."Category" k ON k."id" = cic."category_id"`,
+   LEFT JOIN "public"."Category" k ON k."id" = cic."category_id"
+   LEFT JOIN "public"."catalog_item_visibility" civ ON civ."product_id" = p."id"`,
 );
+/** Public products only: no visibility row, or one with is_public = true (the default for every product). */
+const PUBLIC = Prisma.raw(`coalesce(civ."is_public", true)`);
 const BASE_COLUMNS = Prisma.raw(
   `p."id"::text AS "id", p."article", p."name",
    ci."photo_url" AS "photoUrl", ci."photo_source" AS "photoSource", ci."photo_source_url" AS "photoSourceUrl", ci."photo_license" AS "photoLicense",
@@ -207,7 +222,7 @@ function photoCondition(columns: Set<OptionalColumn>) {
 
 /** WHERE parts; the section filter can be left out (for per-section counts). */
 function conditions(f: CatalogFilterInput, tokens: string[], columns: Set<OptionalColumn>, withCategory = true): Prisma.Sql[] {
-  const parts = searchCondition(tokens);
+  const parts = [PUBLIC, ...searchCondition(tokens)];
   if (withCategory && f.categoryIds?.length) parts.push(Prisma.sql`cic."category_id" IN (${Prisma.join(f.categoryIds)})`);
   const price = priceExpr(columns);
   if (f.hasPrice || f.priceMin !== undefined || f.priceMax !== undefined) {
@@ -230,8 +245,18 @@ function orderBy(sort: CatalogSort, tokens: string[], columns: Set<OptionalColum
   switch (sort) {
     case "relevance": {
       if (!tokens.length) break;
-      const prefix = `${escapeLike(tokens[0])}%`;
-      return Prisma.sql`(CASE WHEN ${NAME_NORM} LIKE ${prefix} ESCAPE '\\' OR ${ARTICLE_NORM} LIKE ${prefix} ESCAPE '\\' THEN 0 ELSE 1 END) ASC, ${NAME_SORT} ASC, p."id" ASC`;
+      // 0 exact article, 1 the name starts with the whole query, 2 the name or article starts with the first word,
+      // 3 the first word starts a word of the name, 4 the rest. Within a tier products with a barcode article (regular
+      // retail items) come before rows whose article is a note such as "Комплектующая"; then by name and id.
+      const whole = tokens.join(" ");
+      const first = escapeLike(tokens[0]);
+      return Prisma.sql`(CASE
+          WHEN ${ARTICLE_NORM} = ${whole} THEN 0
+          WHEN ${NAME_NORM} LIKE ${`${escapeLike(whole)}%`} ESCAPE '\\' THEN 1
+          WHEN ${NAME_NORM} LIKE ${`${first}%`} ESCAPE '\\' OR ${ARTICLE_NORM} LIKE ${`${first}%`} ESCAPE '\\' THEN 2
+          WHEN (' ' || translate(${NAME_NORM}, '()«»"/,.+', '          ')) LIKE ${`% ${first}%`} ESCAPE '\\' THEN 3
+          ELSE 4 END) ASC,
+        (btrim(coalesce(p."article", '')) ~ '^[0-9]{8,14}$') DESC, ${NAME_SORT} ASC, p."id" ASC`;
     }
     case "price_asc":
       if (price) return Prisma.sql`${price} ASC NULLS LAST, ${NAME_SORT} ASC, p."id" ASC`;
@@ -298,7 +323,7 @@ export async function listCatalogItems(opts: CatalogListOptions): Promise<Catalo
   let layoutFixed = false;
   let res = await run(query);
   if (query && res.total === 0) {
-    // "gfhfwtnfvjk" → "парацетамол"
+    // The whole query typed with the English layout: "gfhfwtnfvjk" → "парацетамол" (the page says so).
     const fixed = fixKeyboardLayout(query);
     if (fixed) {
       const alt = await run(fixed);
@@ -307,6 +332,21 @@ export async function listCatalogItems(opts: CatalogListOptions): Promise<Catalo
         query = fixed;
         layoutFixed = true;
       }
+    }
+  }
+  // Nothing or very little found: offer a corrected query as a link — never applied silently.
+  let suggestion: CatalogPage["suggestion"] = null;
+  if (query && !layoutFixed && res.total < SUGGEST_BELOW && page === 1 && opts.suggest !== false) {
+    try {
+      const corrected = suggestCorrection(catalogTokens(query), await vocabulary());
+      if (corrected) {
+        const cond = where(conditions(opts, catalogTokens(corrected), columns));
+        const [r] = await prisma.$queryRaw<{ total: bigint }[]>`SELECT COUNT(*) AS total FROM ${P} ${JOINS} WHERE ${cond}`;
+        const total = Number(r?.total ?? 0);
+        if (total > res.total) suggestion = { query: corrected, total };
+      }
+    } catch (e) {
+      console.error("search suggestion failed", (e as Error).message.slice(0, 200));
     }
   }
   return {
@@ -318,7 +358,38 @@ export async function listCatalogItems(opts: CatalogListOptions): Promise<Catalo
     query,
     layoutFixed,
     sort: res.sort,
+    suggestion,
   };
+}
+
+/** A correction is offered when the query finds fewer products than this. */
+const SUGGEST_BELOW = 3;
+
+// Words of public product names for "Did you mean …?", per server instance, refreshed every 10 minutes.
+let vocabularyCache: { at: number; value: Promise<Vocabulary> } | null = null;
+const VOCABULARY_TTL_MS = 10 * 60_000;
+
+function vocabulary(): Promise<Vocabulary> {
+  if (vocabularyCache && Date.now() - vocabularyCache.at < VOCABULARY_TTL_MS) return vocabularyCache.value;
+  const value = prisma.$queryRaw<{ w: string; n: number }[]>`
+    SELECT w, count(*)::int AS n FROM (
+      SELECT DISTINCT p."id", w
+      FROM ${P} LEFT JOIN "public"."catalog_item_visibility" civ ON civ."product_id" = p."id",
+        LATERAL regexp_split_to_table(translate(lower(coalesce(p."name", '')), 'ё', 'е'), '[^a-zа-яәғқңөұүһі]+') AS w
+      WHERE ${PUBLIC}
+    ) t
+    WHERE length(w) >= 3
+    GROUP BY w`.then((rows) => buildVocabulary(rows.map((r) => [r.w, r.n] as [string, number])));
+  vocabularyCache = { at: Date.now(), value };
+  value.catch(() => {
+    vocabularyCache = null;
+  });
+  return value;
+}
+
+/** Forget the cached search vocabulary (tests). */
+export function resetCatalogVocabularyCache() {
+  vocabularyCache = null;
 }
 
 /**
@@ -342,7 +413,7 @@ export function isCatalogId(value: unknown): value is string {
 export async function getCatalogItem(id: string, locale: Locale = "ru"): Promise<CatalogItem | null> {
   if (!isCatalogId(id)) return null;
   const columns = await optionalColumns();
-  const rows = await prisma.$queryRaw<Row[]>`SELECT ${selectList(columns)} FROM ${P} ${JOINS} WHERE p."id" = ${BigInt(id)} LIMIT 1`;
+  const rows = await prisma.$queryRaw<Row[]>`SELECT ${selectList(columns)} FROM ${P} ${JOINS} WHERE p."id" = ${BigInt(id)} AND ${PUBLIC} LIMIT 1`;
   return rows[0] ? toItem(rows[0], locale) : null;
 }
 
@@ -351,22 +422,21 @@ export async function listCatalogItemsByIds(ids: string[], locale: Locale = "ru"
   const valid = Array.from(new Set(ids.filter(isCatalogId))).slice(0, 100);
   if (!valid.length) return [];
   const columns = await optionalColumns();
-  const rows = await prisma.$queryRaw<Row[]>`SELECT ${selectList(columns)} FROM ${P} ${JOINS} WHERE p."id" IN (${Prisma.join(valid.map((id) => BigInt(id)))})`;
+  const rows = await prisma.$queryRaw<Row[]>`SELECT ${selectList(columns)} FROM ${P} ${JOINS} WHERE p."id" IN (${Prisma.join(valid.map((id) => BigInt(id)))}) AND ${PUBLIC}`;
   const byId = new Map(rows.map((r) => [r.id, toItem(r, locale)]));
   return valid.map((id) => byId.get(id)).filter((x): x is CatalogItem => !!x);
 }
 
 /**
- * A few catalogue products for the home page. Not "popular" or "recommended" (there is no such data): just a
- * stable selection — products with a photo first, then names that start with a letter, then by name and id —
- * so the set does not change between page loads while the catalogue stays the same.
+ * Public products in a stable order (photos first, then names that start with a letter, then by name and id) —
+ * the fallback for the home page when too few products have a published section.
  */
 export async function listCatalogPreview(limit = 4, locale: Locale = "ru"): Promise<CatalogItem[]> {
-  const n = Math.max(1, Math.min(12, Math.floor(limit)));
+  const n = Math.max(1, Math.min(24, Math.floor(limit)));
   const columns = await optionalColumns();
   const noPhoto = Prisma.sql`NOT ${photoCondition(columns)}`;
   const rows = await prisma.$queryRaw<Row[]>`SELECT ${selectList(columns)} FROM ${P} ${JOINS}
-    WHERE btrim(coalesce(p."name", '')) <> ''
+    WHERE ${PUBLIC} AND btrim(coalesce(p."name", '')) <> ''
     ORDER BY ${noPhoto} ASC,
       (coalesce(p."name", '') ~ '^[[:alpha:]]') DESC,
       ${NAME_SORT} ASC, p."id" ASC
@@ -374,8 +444,60 @@ export async function listCatalogPreview(limit = 4, locale: Locale = "ru"): Prom
   return rows.map((r) => toItem(r, locale));
 }
 
+export interface CandidateQuery {
+  /** Published section ids (subsections included); null = the whole public catalogue (products without a section). */
+  categoryIds: string[] | null;
+  /** Name fragments (already normalised: lower-case, ё→е); a candidate's name must contain at least one. */
+  nameLike?: string[];
+  excludeIds?: string[];
+  limit: number;
+  /** Stable pseudo-random order seeded by this text (photos first); without it: by name and id. */
+  seed?: string;
+  locale?: Locale;
+}
+
+/**
+ * Up to `limit` public products of the given sections, for recommendations. One bounded query, never the whole
+ * catalogue; the order is stable for the same input.
+ */
+export async function listCatalogCandidates(q: CandidateQuery): Promise<CatalogItem[]> {
+  if (q.categoryIds && !q.categoryIds.length) return [];
+  const columns = await optionalColumns();
+  const parts: Prisma.Sql[] = [PUBLIC];
+  if (q.categoryIds) parts.push(Prisma.sql`cic."category_id" IN (${Prisma.join(q.categoryIds)})`);
+  const likes = (q.nameLike ?? []).map((t) => t.trim()).filter((t) => t.length >= 3).slice(0, 6);
+  if (likes.length) parts.push(Prisma.sql`(${Prisma.join(likes.map((t) => Prisma.sql`${NAME_NORM} LIKE ${`%${escapeLike(t)}%`} ESCAPE '\\'`), " OR ")})`);
+  const exclude = (q.excludeIds ?? []).filter(isCatalogId).slice(0, 200);
+  if (exclude.length) parts.push(Prisma.sql`p."id" NOT IN (${Prisma.join(exclude.map((id) => BigInt(id)))})`);
+  const order = q.seed
+    ? Prisma.sql`(NOT ${photoCondition(columns)}) ASC, md5(p."id"::text || ${q.seed}) ASC, p."id" ASC`
+    : Prisma.sql`${NAME_SORT} ASC, p."id" ASC`;
+  const rows = await prisma.$queryRaw<Row[]>`SELECT ${selectList(columns)} FROM ${P} ${JOINS}
+    WHERE ${where(parts)} ORDER BY ${order} LIMIT ${Math.max(1, Math.min(300, Math.floor(q.limit)))}`;
+  return rows.map((r) => toItem(r, q.locale ?? "ru"));
+}
+
+/**
+ * Candidates for the home page selection: public products with a published section, up to `perSection` from each
+ * section, photos first, in a stable pseudo-random order (seeded) — the caller spreads them across sections and brands.
+ */
+export async function listHomeCandidates(opts: { perSection: number; seed: string; locale?: Locale }): Promise<(CatalogItem & { sectionId: string })[]> {
+  const columns = await optionalColumns();
+  const per = Math.max(1, Math.min(60, Math.floor(opts.perSection)));
+  const rows = await prisma.$queryRaw<(Row & { sectionId: string })[]>`
+    SELECT * FROM (
+      SELECT ${selectList(columns)}, cic."category_id" AS "sectionId",
+        row_number() OVER (PARTITION BY cic."category_id" ORDER BY (NOT ${photoCondition(columns)}) ASC, md5(p."id"::text || ${opts.seed}) ASC, p."id" ASC) AS rn
+      FROM ${P} ${JOINS}
+      WHERE ${PUBLIC} AND cic."category_id" IS NOT NULL AND btrim(coalesce(p."name", '')) <> ''
+    ) x
+    WHERE x.rn <= ${per}
+    ORDER BY x.rn, x."sectionId"`;
+  return rows.map((r) => ({ ...toItem(r, opts.locale ?? "ru"), sectionId: r.sectionId }));
+}
+
 /** Up to `limit` matches for the header search suggestions. */
-export async function suggestCatalogItems(q: string, limit = 7, locale: Locale = "ru"): Promise<{ items: CatalogItem[]; query: string }> {
+export async function suggestCatalogItems(q: string, limit = 7, locale: Locale = "ru"): Promise<{ items: CatalogItem[]; query: string; didYouMean: string | null }> {
   const res = await listCatalogItems({ q, page: 1, pageSize: limit, locale, sort: "relevance" });
-  return { items: res.items, query: res.query ?? q };
+  return { items: res.items, query: res.query ?? q, didYouMean: res.items.length ? null : (res.suggestion?.query ?? null) };
 }

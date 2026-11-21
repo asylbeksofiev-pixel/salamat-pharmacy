@@ -1,5 +1,5 @@
 "use client";
-// "Offers and discounts" carousel on the home page: one banner per view. Native swipe with scroll-snap on
+// "SALAMAT services" carousel on the home page: one banner per view. Native swipe with scroll-snap on
 // phones, mouse drag on desktops, "previous / next" buttons and dots for the current banner. Keyboard: Tab
 // reaches the banner links and the controls; ←/→ on the controls change the banner. There is no autoplay, so
 // nothing moves unless the visitor moves it; with prefers-reduced-motion the change is instant.
@@ -10,7 +10,7 @@ import { useSite } from "./SiteProvider";
 import { CarouselArrows } from "../catalog/ProductCarousel";
 import { cn } from "../ui/cn";
 
-export function PromoCarousel({ children, id }: { children: ReactNode; id: string }) {
+export function PromoCarousel({ children, id, label }: { children: ReactNode; id: string; label: string }) {
   const { t } = useSite();
   const { ref, state, go, goTo } = useCarousel<HTMLDivElement>();
   const slides = Children.toArray(children).filter(isValidElement) as ReactElement<{ "aria-label"?: string }>[];
@@ -28,7 +28,7 @@ export function PromoCarousel({ children, id }: { children: ReactNode; id: strin
   };
 
   return (
-    <div role="region" aria-roledescription={t.home.carouselRole} aria-label={t.home.promoTitle}>
+    <div role="region" aria-roledescription={t.home.carouselRole} aria-label={label}>
       <div
         ref={ref}
         id={id}
@@ -56,7 +56,7 @@ export function PromoCarousel({ children, id }: { children: ReactNode; id: strin
                   aria-label={fmt(t.home.promoGoTo, { index: i + 1 })}
                   aria-current={active || undefined}
                   aria-controls={id}
-                  className="group grid h-11 min-w-7 touch-manipulation place-items-center px-1.5"
+                  className="group grid h-11 min-w-11 touch-manipulation place-items-center px-1.5"
                 >
                   <span className={cn("sal-promo-dot block h-2 rounded-full", active ? "w-6 bg-brand-600" : "w-2 bg-line-strong group-hover:bg-brand-300")} aria-hidden="true" />
                 </button>

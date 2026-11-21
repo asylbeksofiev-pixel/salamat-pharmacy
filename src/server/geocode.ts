@@ -5,6 +5,7 @@ import "server-only";
 // with caching). Suggestions while typing: Yandex Geosuggest (YANDEX_SUGGEST_API_KEY).
 // Searches are limited to Astana and its suburbs. Addresses typed by visitors are never logged.
 import { env } from "./env";
+import { distanceKm } from "@/lib/geo";
 
 export interface GeoPoint {
   lat: number;
@@ -30,11 +31,11 @@ export function inArea(lat: number, lng: number): boolean {
 }
 
 // Small in-memory cache (per server instance): repeated searches do not hit the provider again.
-const cache = new Map<string, { at: number; value: GeoPoint | null }>();
+const cache = new Map<string, { at: number; value: GeoPoint[] }>();
 const CACHE_TTL_MS = 24 * 3600_000;
 const CACHE_MAX = 500;
 
-function cacheGet(key: string): GeoPoint | null | undefined {
+function cacheGet(key: string): GeoPoint[] | undefined {
   const hit = cache.get(key);
   if (!hit) return undefined;
   if (Date.now() - hit.at > CACHE_TTL_MS) {
@@ -43,7 +44,7 @@ function cacheGet(key: string): GeoPoint | null | undefined {
   }
   return hit.value;
 }
-function cacheSet(key: string, value: GeoPoint | null) {
+function cacheSet(key: string, value: GeoPoint[]) {
   if (cache.size >= CACHE_MAX) cache.delete(cache.keys().next().value!);
   cache.set(key, { at: Date.now(), value });
 }
@@ -64,11 +65,14 @@ async function fetchJson(url: string, headers: Record<string, string> = {}): Pro
   return res.json();
 }
 
-async function nominatim(query: string, lang: string): Promise<GeoPoint | null> {
+/** Up to this many addresses per search; several distinct ones are offered to the visitor to choose from. */
+const MAX_CANDIDATES = 5;
+
+async function nominatim(query: string, lang: string): Promise<GeoPoint[]> {
   await nominatimSlot();
   const params = new URLSearchParams({
     format: "jsonv2",
-    limit: "1",
+    limit: String(MAX_CANDIDATES),
     countrycodes: "kz",
     bounded: "1",
     viewbox: `${AREA.west},${AREA.north},${AREA.east},${AREA.south}`,
@@ -79,23 +83,25 @@ async function nominatim(query: string, lang: string): Promise<GeoPoint | null> 
     "User-Agent": `SALAMAT pharmacy site (${env.appUrl})`,
     Referer: env.appUrl,
   })) as { lat?: string; lon?: string; display_name?: string }[];
-  const hit = Array.isArray(data) ? data[0] : undefined;
-  if (!hit?.lat || !hit.lon) return null;
-  const lat = Number(hit.lat);
-  const lng = Number(hit.lon);
-  return Number.isFinite(lat) && Number.isFinite(lng) && inArea(lat, lng) ? { lat, lng, label: String(hit.display_name ?? query) } : null;
+  const out: GeoPoint[] = [];
+  for (const hit of Array.isArray(data) ? data : []) {
+    const lat = Number(hit?.lat);
+    const lng = Number(hit?.lon);
+    if (Number.isFinite(lat) && Number.isFinite(lng) && inArea(lat, lng)) out.push({ lat, lng, label: String(hit.display_name ?? query) });
+  }
+  return out;
 }
 
 /** Yandex "kind" values precise enough to measure a distance from (not a whole city or region). */
 const YANDEX_KINDS = new Set(["house", "street", "entrance", "metro", "district", "route", "station", "airport", "vegetation", "hydro", "other"]);
 const YANDEX_LANG: Record<string, string> = { ru: "ru_RU", kk: "kk_KZ", en: "en_US" };
 
-async function yandex(query: string, lang: string, uri?: string): Promise<GeoPoint | null> {
+async function yandex(query: string, lang: string, uri?: string): Promise<GeoPoint[]> {
   const params = new URLSearchParams({
     apikey: env.geocoder.yandexGeocoderKey,
     format: "json",
     lang: YANDEX_LANG[lang.slice(0, 2)] ?? "ru_RU",
-    results: "1",
+    results: uri ? "1" : String(MAX_CANDIDATES),
     bbox: `${AREA.west},${AREA.south}~${AREA.east},${AREA.north}`,
     rspn: "1",
   });
@@ -106,21 +112,41 @@ async function yandex(query: string, lang: string, uri?: string): Promise<GeoPoi
   const data = (await res.json()) as {
     response?: { GeoObjectCollection?: { featureMember?: { GeoObject?: { name?: string; description?: string; Point?: { pos?: string }; metaDataProperty?: { GeocoderMetaData?: { text?: string; kind?: string } } } }[] } };
   };
-  const obj = data.response?.GeoObjectCollection?.featureMember?.[0]?.GeoObject;
-  const [lng, lat] = String(obj?.Point?.pos ?? "").split(" ").map(Number);
-  const meta = obj?.metaDataProperty?.GeocoderMetaData;
-  if (!Number.isFinite(lat) || !Number.isFinite(lng) || !inArea(lat, lng)) return null;
-  // "locality"/"province"/"country" mean only the city was recognised: no honest distance from that.
-  if (meta?.kind && !YANDEX_KINDS.has(meta.kind)) return null;
-  const label = (meta?.text || [obj?.name, obj?.description].filter(Boolean).join(", ") || query).replace(/^Казахстан,\s*|^Қазақстан,\s*|^Kazakhstan,\s*/i, "");
-  return { lat, lng, label };
+  const out: GeoPoint[] = [];
+  for (const member of data.response?.GeoObjectCollection?.featureMember ?? []) {
+    const obj = member?.GeoObject;
+    const [lng, lat] = String(obj?.Point?.pos ?? "").split(" ").map(Number);
+    const meta = obj?.metaDataProperty?.GeocoderMetaData;
+    if (!Number.isFinite(lat) || !Number.isFinite(lng) || !inArea(lat, lng)) continue;
+    // "locality"/"province"/"country" mean only the city was recognised: no honest distance from that.
+    if (meta?.kind && !YANDEX_KINDS.has(meta.kind)) continue;
+    const label = (meta?.text || [obj?.name, obj?.description].filter(Boolean).join(", ") || query).replace(/^Казахстан,\s*|^Қазақстан,\s*|^Kazakhstan,\s*/i, "");
+    out.push({ lat, lng, label });
+  }
+  return out;
+}
+
+/** Candidates that are really different places: duplicates and points closer than 300 m to an earlier one are dropped. */
+export function distinctPlaces(points: GeoPoint[], minKm = 0.3): GeoPoint[] {
+  const out: GeoPoint[] = [];
+  for (const p of points) {
+    if (out.some((q) => q.label.toLowerCase() === p.label.toLowerCase() || distanceKm(p, q) < minKm)) continue;
+    out.push(p);
+  }
+  return out.slice(0, MAX_CANDIDATES);
+}
+
+/** The best match for the address, or null (see geocodeCandidates). */
+export async function geocodeAddress(raw: string, lang: "ru" | "kk" | "en", uri?: string | null): Promise<GeoPoint | null> {
+  return (await geocodeCandidates(raw, lang, uri))[0] ?? null;
 }
 
 /**
- * Finds the address in Astana. Returns null when nothing matches; throws GeocoderUnavailableError when the
- * service cannot be reached or is switched off. A city name is added once when the first attempt finds nothing.
+ * Finds the address in Astana: up to 5 distinct places, best first (several = the visitor chooses). Empty when
+ * nothing matches; throws GeocoderUnavailableError when the service cannot be reached or is switched off. A city name
+ * is added once when the first attempt finds nothing. One provider request per search (two with the city added).
  */
-export async function geocodeAddress(raw: string, lang: "ru" | "kk" | "en", uri?: string | null): Promise<GeoPoint | null> {
+export async function geocodeCandidates(raw: string, lang: "ru" | "kk" | "en", uri?: string | null): Promise<GeoPoint[]> {
   const provider = geocoderProvider();
   if (provider === "off") throw new GeocoderUnavailableError("off");
   const query = raw.replace(/\s+/g, " ").trim().slice(0, 120);
@@ -130,17 +156,17 @@ export async function geocodeAddress(raw: string, lang: "ru" | "kk" | "en", uri?
   const cached = cacheGet(key);
   if (cached !== undefined) return cached;
   const find = provider === "yandex" ? yandex : nominatim;
-  let result: GeoPoint | null;
+  let result: GeoPoint[];
   try {
     if (byUri) {
-      result = await yandex(query, lang, byUri);
-      if (result) result = { ...result, label: query || result.label };
+      result = (await yandex(query, lang, byUri)).slice(0, 1).map((r) => ({ ...r, label: query || r.label }));
     } else result = await find(query, lang === "en" ? "en" : lang === "kk" ? "kk,ru" : "ru");
-    if (!result && !/астан|astana|нұр-сұлтан|нур-султан/i.test(query)) result = await find(`${query}, Астана`, lang === "en" ? "en" : "ru");
+    if (!result.length && !/астан|astana|нұр-сұлтан|нур-султан/i.test(query)) result = await find(`${query}, Астана`, lang === "en" ? "en" : "ru");
   } catch (e) {
     if (e instanceof GeocoderUnavailableError) throw e;
     throw new GeocoderUnavailableError((e as Error).name);
   }
+  result = distinctPlaces(result);
   cacheSet(key, result);
   return result;
 }

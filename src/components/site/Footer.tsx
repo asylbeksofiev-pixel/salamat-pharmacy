@@ -28,29 +28,29 @@ export function Footer({ locale, t, helpline, company, categories, orderingEnabl
         <nav aria-labelledby="f-catalog">
           <h2 id="f-catalog" className="mb-3 text-sm font-bold tracking-wider text-ink uppercase">{t.common.catalog}</h2>
           <ul className="flex flex-col gap-2 text-sm text-ink-soft">
-            <li><Link className="font-medium hover:text-brand-700 hover:underline" href={href("/catalog")}>{t.items.allProducts}</Link></li>
+            <li><Link className="inline-flex min-h-11 items-center font-medium hover:text-brand-700 hover:underline md:min-h-0" href={href("/catalog")}>{t.items.allProducts}</Link></li>
             {categories.slice(0, 9).map((c) => (
-              <li key={c.slug}><Link className="hover:text-brand-700 hover:underline" href={href(`/catalog/${c.slug}`)}>{c.name}</Link></li>
+              <li key={c.slug}><Link className="inline-flex min-h-11 items-center hover:text-brand-700 hover:underline md:min-h-0" href={href(`/catalog/${c.slug}`)}>{c.name}</Link></li>
             ))}
           </ul>
         </nav>
         <nav aria-labelledby="f-customers">
           <h2 id="f-customers" className="mb-3 text-sm font-bold tracking-wider text-ink uppercase">{t.footer.customers}</h2>
           <ul className="flex flex-col gap-2 text-sm text-ink-soft">
-            <li><Link className="hover:text-brand-700 hover:underline" href={href("/pharmacies")}>{t.common.pharmacies}</Link></li>
-            <li><Link className="hover:text-brand-700 hover:underline" href={href("/promotions")}>{t.common.promotions}</Link></li>
-            <li><Link className="hover:text-brand-700 hover:underline" href={href("/help")}>{t.common.help}</Link></li>
-            {orderingEnabled ? <li><Link className="hover:text-brand-700 hover:underline" href={href("/cart")}>{t.common.cart}</Link></li> : null}
-            <li><Link className="hover:text-brand-700 hover:underline" href={href("/favorites")}>{t.common.favorites}</Link></li>
+            <li><Link className="inline-flex min-h-11 items-center hover:text-brand-700 hover:underline md:min-h-0" href={href("/pharmacies")}>{t.common.pharmacies}</Link></li>
+            <li><Link className="inline-flex min-h-11 items-center hover:text-brand-700 hover:underline md:min-h-0" href={href("/promotions")}>{t.common.promotions}</Link></li>
+            <li><Link className="inline-flex min-h-11 items-center hover:text-brand-700 hover:underline md:min-h-0" href={href("/help")}>{t.common.help}</Link></li>
+            {orderingEnabled ? <li><Link className="inline-flex min-h-11 items-center hover:text-brand-700 hover:underline md:min-h-0" href={href("/cart")}>{t.common.cart}</Link></li> : null}
+            <li><Link className="inline-flex min-h-11 items-center hover:text-brand-700 hover:underline md:min-h-0" href={href("/favorites")}>{t.common.favorites}</Link></li>
           </ul>
         </nav>
         <nav aria-labelledby="f-company">
           <h2 id="f-company" className="mb-3 text-sm font-bold tracking-wider text-ink uppercase">{t.footer.company}</h2>
           <ul className="flex flex-col gap-2 text-sm text-ink-soft">
-            <li><Link className="hover:text-brand-700 hover:underline" href={href("/about")}>{t.common.about}</Link></li>
-            <li><Link className="hover:text-brand-700 hover:underline" href={href("/contacts")}>{t.common.contacts}</Link></li>
-            <li><Link className="hover:text-brand-700 hover:underline" href={href("/privacy")}>{t.common.privacy}</Link></li>
-            <li><Link className="hover:text-brand-700 hover:underline" href={href("/terms")}>{t.common.terms}</Link></li>
+            <li><Link className="inline-flex min-h-11 items-center hover:text-brand-700 hover:underline md:min-h-0" href={href("/about")}>{t.common.about}</Link></li>
+            <li><Link className="inline-flex min-h-11 items-center hover:text-brand-700 hover:underline md:min-h-0" href={href("/contacts")}>{t.common.contacts}</Link></li>
+            <li><Link className="inline-flex min-h-11 items-center hover:text-brand-700 hover:underline md:min-h-0" href={href("/privacy")}>{t.common.privacy}</Link></li>
+            <li><Link className="inline-flex min-h-11 items-center hover:text-brand-700 hover:underline md:min-h-0" href={href("/terms")}>{t.common.terms}</Link></li>
           </ul>
         </nav>
       </div>

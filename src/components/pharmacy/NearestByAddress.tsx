@@ -6,7 +6,9 @@
 //   2. Picking a suggestion or pressing "Search" asks /api/pharmacy/nearest: the server geocodes the address
 //      (or takes the picked suggestion's coordinates) and returns the pharmacies sorted by the real distance
 //      between coordinates. The address goes in the request body, never into the URL, and is not stored.
-//   3. The list shows address, distance, phone, "Choose", "Details" and a route from the address in Yandex Maps.
+//   3. When the address matches several different places, the visitor first picks the right one.
+//   4. The list shows address, straight-line distance (said next to each number: it is not a route length or a walking
+//      time), phone, "Choose", "Details" and a route from the address in Yandex Maps.
 // Only pharmacies with coordinates take part; without coordinates the block says so instead of guessing.
 import Link from "next/link";
 import { useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
@@ -37,6 +39,8 @@ type State =
   | { kind: "idle" }
   | { kind: "loading" }
   | { kind: "error"; message: string; retry: boolean }
+  /** The address matches several different places: the visitor picks one, then distances are computed from it. */
+  | { kind: "choose"; choices: { label: string; point: Point }[] }
   | { kind: "done"; label: string; point: Point; provider: string; results: { id: string; km: number }[] };
 
 const SHOWN = 5;
@@ -153,7 +157,10 @@ export function NearestByAddress({
         signal: ctrl.signal,
       });
       const data = await res.json().catch(() => ({}));
-      if (res.ok && data.point) {
+      if (ctrl.signal.aborted) return;
+      if (res.ok && Array.isArray(data.choices) && data.choices.length > 1) {
+        setState({ kind: "choose", choices: data.choices });
+      } else if (res.ok && data.point) {
         setState({ kind: "done", label: data.label, point: data.point, provider: data.provider, results: data.results ?? [] });
       } else if (res.status === 404) setState({ kind: "error", message: t.pharmacy.addressNotFound, retry: false });
       else if (res.status === 400) setState({ kind: "error", message: t.pharmacy.addressTooShort, retry: false });
@@ -365,6 +372,34 @@ export function NearestByAddress({
         ) : null}
       </div>
 
+      {state.kind === "choose" ? (
+        <div className="mt-3">
+          <p className="text-sm font-semibold text-ink" id={`${uid}-choose`}>
+            {t.pharmacy.addressChoose}
+          </p>
+          <ul className="mt-2 flex flex-col gap-2" aria-labelledby={`${uid}-choose`}>
+            {state.choices.map((c, i) => (
+              <li key={`${c.label}-${i}`}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPicked(c.label);
+                    setValue(c.label);
+                    void search(c.label, c.point);
+                  }}
+                  className="flex min-h-11 w-full items-start gap-2.5 rounded-[var(--radius-md)] border border-line px-3.5 py-2.5 text-left text-[0.95rem] text-ink hover:border-brand-600 hover:bg-brand-50 focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-brand-600"
+                >
+                  <Icon name="pin" size={18} className="mt-0.5 shrink-0 text-brand-600" />
+                  <span className="min-w-0 break-words" lang={dataLang(locale, c.label)}>
+                    {c.label}
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
       {state.kind === "done" && !results.length ? <p className="mt-2 text-sm text-ink-soft">{t.pharmacy.addressNoResults}</p> : null}
 
       {state.kind === "done" && results.length ? (
@@ -384,11 +419,12 @@ export function NearestByAddress({
                         {p.address}
                       </Link>
                       <p className="text-sm text-muted">
-                        <span className="font-semibold text-ink-soft tabular-nums">{fmt(t.pharmacy.distanceFromAddress, { distance })}</span>
+                        {/* Straight-line distance between coordinates — said next to every number, not a route length. */}
+                        <span className="font-semibold text-ink-soft tabular-nums">{fmt(t.pharmacy.distanceStraight, { distance })}</span>
                         {i === 0 ? <span className="ml-1.5 font-semibold text-brand-700">· {t.pharmacy.nearestBadge}</span> : null}
                       </p>
                       {p.phones[0] ? (
-                        <a href={telHref(p.phones[0])} className="mt-0.5 inline-flex min-h-8 items-center gap-1.5 text-sm font-medium text-ink-soft tabular-nums hover:text-brand-700">
+                        <a href={telHref(p.phones[0])} className="mt-0.5 inline-flex min-h-11 items-center gap-1.5 text-sm font-medium text-ink-soft tabular-nums hover:text-brand-700">
                           <Icon name="phone" size={14} />
                           {formatPhone(p.phones[0])}
                         </a>

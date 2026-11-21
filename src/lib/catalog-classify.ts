@@ -4,7 +4,10 @@
 // Nothing here infers pharmacological properties or registration status: rules look at what the name literally says
 // (dosage form, product type, brand line), and uncertain cases are left for a person to check.
 
-export const CLASSIFIER_VERSION = "2026-11-19.1";
+// 2026-11-21.1: "р-р" after a size word (nappies, pants, pacifiers, supports) is "размер", not "раствор"; sweets sold by
+// weight (dragée, pastilles) are food; contact lens care, laundry products, plaque indicator tablets; supplement brand
+// lines written with an apostrophe (Nature's Bounty); infusions and prefilled syringes with a solution are medicines.
+export const CLASSIFIER_VERSION = "2026-11-21.1";
 
 export const CATEGORY_SLUGS = [
   "lekarstvennye-sredstva",
@@ -31,11 +34,11 @@ export interface Classification {
   reviewStatus: "auto" | "needs_review";
 }
 
-/** Lower-case, ё→е, unify quotes/dashes and Latin look-alike letters inside Cyrillic words, collapse spaces. */
+/** NFKC then lower-case ("№" → "no"), ё→е, unify quotes/dashes and Latin look-alike letters inside Cyrillic words, collapse spaces. */
 export function normalizeName(name: string): string {
   return ` ${name}`
-    .toLowerCase()
     .normalize("NFKC")
+    .toLowerCase()
     .replace(/ё/g, "е")
     .replace(/(?<![\p{L}])д\/(?=\s?\p{L})/gu, "для ")
     .replace(/(?<![\p{L}])д\.(?=\s?\p{L})/gu, "для ")
@@ -54,12 +57,23 @@ const B = "(?<![\\p{L}\\p{N}])";
 const E = "(?![\\p{L}])";
 const stem = (stems: string) => re(`${B}(?:${stems})`);
 
+/**
+ * "р-р" is the usual abbreviation of both "раствор" (solution) and "размер" (size). It is a size when a size label
+ * follows: S/M/L/XL…, NB, or a one- or two-digit size ("р-р 2", "р-р 4-5", "р-р 7,5", "р-р 1 (0-6 мес)") that is
+ * not a dose or a volume ("р-р 5 мл", "р-р 0,9%"). Runs on normalised names: commas and brackets are spaces, and
+ * NFKC turns "№" into "no".
+ */
+const UNIT = "(?:мкг|мг|мл|ме|ед|гр|г|ml|mg|mcg|iu)(?![\\p{L}])";
+const SIZE_AFTER_RR =
+  "\\s*(?:(?:[xх]{0,4}(?:s|m|l|м|л)|nb|xs)(?![\\p{L}])" +
+  `|\\d{1,2}(?:-\\d{1,2})?(?![\\d.])(?=\\s*(?:$|(?:№|no)\\s?\\d|\\d{4,}|\\d(?:\\s|$)|\\d{1,2}-\\d|(?!${UNIT})\\p{L}{3,})))`;
+
 const D = {
   // dosage forms and medicine wording
   tablets: stem("таблет|таб(?=\\s|$|\\.)|tabs?(?=\\s|$)|табл\\.?|драже|пастилк|леденц(?:ы|ов)? д(?:ля)? рассас"),
   capsules: stem("caps(?=\\s|$)|капсул|капс\\.?(?=\\s|$)"),
-  injection: stem("инъекц|иньекц|ампул(?:а|ы|ах)?(?=\\s|$)|в ампулах|лиофилизат|для приготовления раствора для|шприц-тюбик|шприц-ручк|флакон.*в/в|в/м"),
-  solution: stem("раствор|р-р|концентрат для приготовления"),
+  injection: stem("инъекц|иньекц|ампул(?:а|ы|ах)?(?=\\s|$)|в ампулах|лиофилизат|для приготовления раствора для|шприц-тюбик|шприц-ручк|флакон.*в/в|в/м|(?:эмульсия|концентрат|раствор) для инфузий|для внутривенного введения"),
+  solution: stem(`раствор|р-р(?!${SIZE_AFTER_RR})|концентрат для приготовления`),
   suppository: stem("суппоз|супппоз|свеч(?:и|а) (?:ректальн|вагинальн)|свечи(?=\\s|$)"),
   ointment: stem("мазь|линимент|паста (?:цинковая|салициловая|теймурова|лассара)"),
   drops: stem("капли"),
@@ -78,7 +92,7 @@ const D = {
   // supplements and vitamins
   bad: stem("бад(?=\\s|$)|биологически активн|биодобавк|пищевая добавка|dietary supplement"),
   badBrands: stem(
-    "эвалар|evalar|солгар|solgar|now foods|now (?=\\p{L})|доппельгерц|doppelherz|orzax|орзакс|vitime|витайм|natures bounty|nature's bounty|нэйчес баунти|dr\\.? frei|доктор фрай|алфавит|alfavit|turamin|турамин|vitamir|витамир|fitness formula|california gold|киркланд|kirkland|nutricost|бадм|арт лайф|art life|сибирское здоровье|siberian wellness|naturalsupp|натуралсапп|vplab|qnt|maxler|optimum nutrition|ultimate nutrition|sport technology|olimp|nutrend|geon|биотредин|супрадин кидс|мульти-табс|multi-tabs|пиковит|vitrum|витрум|центрум|centrum|компливит|complivit|солгар|ферретаб|элевит|elevit|прегнакеа|pregnacare|вита-|vita-?mishki|витамишки|bioniq|zinc|now",
+    "эвалар|evalar|солгар|solgar|now foods|now (?=\\p{L})|доппельгерц|doppelherz|orzax|орзакс|vitime|витайм|natures bounty|nature's bounty|nature s bounty|нэйчес баунти|animal parade|энимал парад|dr\\.? frei|доктор фрай|алфавит|alfavit|turamin|турамин|vitamir|витамир|fitness formula|california gold|киркланд|kirkland|nutricost|бадм|арт лайф|art life|сибирское здоровье|siberian wellness|naturalsupp|натуралсапп|vplab|qnt|maxler|optimum nutrition|ultimate nutrition|sport technology|olimp|nutrend|geon|биотредин|супрадин кидс|мульти-табс|multi-tabs|пиковит|vitrum|витрум|центрум|centrum|компливит|complivit|солгар|ферретаб|элевит|elevit|прегнакеа|pregnacare|вита-|vita-?mishki|витамишки|bioniq|zinc|now",
   ),
   vitaminWords: stem(
     "млрд кое|кое(?=\\s)|витамин|vitamin|мультивит|поливит|омега|omega|рыбий жир|fish oil|магний|magnesium|кальций|calcium|цинк|zinc|железо|iron|селен|selenium|йод|iodine|коллаген|collagen|глюкозамин|хондроитин|q10|коэнзим|лецитин|биотин|biotin|фолиев|folic|лютеин|lutein|пробиотик|probiotic|пребиотик|бифидо|лакто(?:бакт|бацилл)|спирулин|хлорелл|гиалурон.*капс|аскорбин|ретинол|токоферол|холекальциферол|d3",
@@ -91,7 +105,7 @@ const D = {
 
   // medical devices and supplies
   devices: stem(
-    "тутор|рукав (?:мед|компр)|электрогрелк|пилюля(?=\\s)|органайзер для таблет|пояс из|овуляц|устройство для|облучатель|рециркулятор|скальпел|очки защитн|клеенка (?:подкладн|медицин)|кинезио|тейп|система для вливан|система инфузион|аспиратор(?! назальн)|тонометр|термометр|градусник|глюкометр|тест-полоск|тест полоск|ланцет|небулайзер|ингалятор(?! для)|пульсоксиметр|оксиметр|стетоскоп|фонендоскоп|массажер|ирригатор|грелк|кружка эсмарха|клизма|спринцовк|шприц(?!-тюбик|-ручк)|игла|катетер|канюл|систем[аы] для|бинт|марля|марлев|вата (?:медицинск|хирургическ)|медицинская вата|пластыр|лейкопластыр|повязк|салфетк[аи] (?:стерильн|марлев|кровоостанавл|антисептическ|спиртов)|спиртовые салфетки|перчатк|маска медицинск|маски медицинск|бахил|пеленк[аи] (?:впитывающ|медицинск)|судно|утк[аи] медицин|мочеприемник|калоприемник|стомическ|бандаж|корсет|ортез|корректор осанки|напалечник|наколенник|налокотник|голеностоп|фиксатор|шина |бюстгальтер компресс|трикотаж компресс|компрессионн|чулки|колготки (?:компресс|антиварик)|гольфы (?:компресс|антиварик)|эластичный бинт|бинт эластичн|стельк|ортопедическ|подушка ортопед|костыл|трость|ходунк|коляска инвалид|тест на беременность|тест для определения|тест-систем|экспресс-тест|тест (?=\\p{L})|тест(?=\\s|$)|презерватив|condom|медтекстиль|эласт(?=\\s|$)|elast|pharmaplast|фармапласт|unifix|омрон|omron|microlife|микролайф|b\\.well|бивел|little doctor|литтл доктор|and (?=ua|ue)|a&d|beurer|бойрер|gamma|термоконтейнер|таблетниц|контейнер для (?:таблеток|анализ)|пипетк|мерный стаканчик|пинцет|ножницы медицинск|лупа|бахилы|жгут|воротник шанца|ингаляционн.*маск|маска для небулайзер|трубка воздушн|стаканчик для ингалятор|насадк[аи] для (?:ирригатор|ингалятор)|ушные палочки медицин|аппликатор кузнецова|ипликатор|пояс (?:из собачьей|согревающ|ортопед|радикулит)|ватные шарики|вата(?=\\s|$)",
+    "тутор|рукав (?:мед|компр)|электрогрелк|пилюля(?=\\s)|органайзер для таблет|пояс из|овуляц|устройство для|облучатель|рециркулятор|скальпел|очки защитн|клеенка (?:подкладн|медицин)|кинезио|тейп|система для вливан|система инфузион|аспиратор(?! назальн)|тонометр|термометр|градусник|глюкометр|тест-полоск|тест полоск|ланцет|небулайзер|ингалятор(?! для)|пульсоксиметр|оксиметр|стетоскоп|фонендоскоп|массажер|ирригатор|грелк|кружка эсмарха|клизма|спринцовк|шприц(?!-тюбик|-ручк)|игла|катетер|канюл|систем[аы] для|бинт|марля|марлев|вата (?:медицинск|хирургическ)|медицинская вата|пластыр|лейкопластыр|повязк|салфетк[аи] (?:стерильн|марлев|кровоостанавл|антисептическ|спиртов)|спиртовые салфетки|перчатк|маска медицинск|маски медицинск|бахил|пеленк[аи] (?:впитывающ|медицинск)|судно|утк[аи] медицин|мочеприемник|калоприемник|стомическ|бандаж|корсет|ортез|корректор\\p{L}* осанки|пояс поддерживающ|для (?:контактных )?линз|напалечник|наколенник|налокотник|голеностоп|фиксатор|шина |бюстгальтер компресс|трикотаж компресс|компрессионн|чулки|колготки (?:компресс|антиварик)|гольфы (?:компресс|антиварик)|эластичный бинт|бинт эластичн|стельк|ортопедическ|подушка ортопед|костыл|трость|ходунк|коляска инвалид|тест на беременность|тест для определения|тест-систем|экспресс-тест|тест (?=\\p{L})|тест(?=\\s|$)|презерватив|condom|медтекстиль|эласт(?=\\s|$)|elast|pharmaplast|фармапласт|unifix|омрон|omron|microlife|микролайф|b\\.well|бивел|little doctor|литтл доктор|and (?=ua|ue)|a&d|beurer|бойрер|gamma|термоконтейнер|таблетниц|контейнер для (?:таблеток|анализ)|пипетк|мерный стаканчик|пинцет|ножницы медицинск|лупа|бахилы|жгут|воротник шанца|ингаляционн.*маск|маска для небулайзер|трубка воздушн|стаканчик для ингалятор|насадк[аи] для (?:ирригатор|ингалятор)|ушные палочки медицин|аппликатор кузнецова|ипликатор|пояс (?:из собачьей|согревающ|ортопед|радикулит)|ватные шарики|вата(?=\\s|$)",
   ),
 
   // food
@@ -117,7 +131,7 @@ const D = {
 
   // oral care
   oral: stem(
-    "ротовой полости|полоскания рта|освежитель для рта|(?<![\\p{L}])з п(?=\\s)|для верхней челюсти|для нижней челюсти|протефикс|protefix|щетка для языка|скребок для языка|зубн(?:ая|ой|ые) (?:паст|щетк|порош|нит|гель)|зубная|зубной|паста зубная|щетка зубная|зубные щетки|межзубн|ершик|флосс|floss|зубная нить|нить зубная|ополаскиватель для (?:рта|полости рта|десен|зуб)|ополаскиватель(?! для волос)|для полости рта|полости рта|для десен|десна|десен|ирригатор|для зубов|для зубных протезов|для протезов|фиксирующий крем для|корега|corega|лесной бальзам|blend-a-med|блендамед|colgate|колгейт|oral-?b|орал-?би|орал б|splat|сплат|lacalut|лакалут|curaprox|курапрокс|curasept|курасепт|president|президент|sensodyne|сенсодин|parodontax|пародонтакс|elmex|элмекс|r\\.o\\.c\\.s|рокс|roks|tepe|тепе|jordan|джордан|biorepair|биорепейр|mexidol dent|мексидол дент|асепта|asepta|пародонтол|новый жемчуг|silca|силка|dentissimo|дентиссимо|vivax dent|рокс|миррадент|miradent|edel\\+white|эдель|pierrot|пиерот|marvis|марвис|aquafresh|аквафреш|apadent|ападент|ультрадекс|ultradex|ортодонт|кариес|отбеливающая (?:паста|полоск)|полоски отбел|ополаскивател",
+    "ротовой полости|полоскания рта|освежитель для рта|(?<![\\p{L}])з п(?=\\s)|для верхней челюсти|для нижней челюсти|протефикс|protefix|щетка для языка|скребок для языка|зубн(?:ая|ой|ые) (?:паст|щетк|порош|нит|гель)|зубная|зубной|паста зубная|щетка зубная|зубные щетки|межзубн|ершик|флосс|floss|зубная нить|нить зубная|ополаскиватель для (?:рта|полости рта|десен|зуб)|ополаскиватель(?! для волос)|для полости рта|полости рта|для десен|десна|десен|ирригатор|для зубов|для зубных протезов|для протезов|фиксирующий крем для|корега|corega|лесной бальзам|blend-a-med|блендамед|colgate|колгейт|oral-?b|орал-?би|орал б|splat|сплат|lacalut|лакалут|curaprox|курапрокс|curasept|курасепт|president|президент|sensodyne|сенсодин|parodontax|пародонтакс|elmex|элмекс|r\\.o\\.c\\.s|рокс|roks|tepe|тепе|jordan|джордан|biorepair|биорепейр|mexidol dent|мексидол дент|асепта|asepta|пародонтол|новый жемчуг|silca|силка|dentissimo|дентиссимо|vivax dent|рокс|миррадент|miradent|edel ?\\+ ?white|эдель(?!вейс)|pierrot|пиерот|marvis|марвис|aquafresh|аквафреш|apadent|ападент|ультрадекс|ultradex|ортодонт|кариес|отбеливающая (?:паста|полоск)|полоски отбел|ополаскивател|зубного налета|plack test|plack tabs",
   ),
 
   // hygiene
@@ -127,6 +141,22 @@ const D = {
 } satisfies Record<string, RegExp>;
 
 const has = (n: string, k: keyof typeof D) => D[k].test(n);
+
+// Product types that are never medicines, whatever abbreviations their names use ("р-р" = size).
+const NAPPIES = re(`${B}(?:подгузн|трусики|трусы (?:одноразов|послеродов|впитыва|для плавания|c прокладкой|с прокладкой)|нижнее белье|впитывающее белье)`);
+const PACIFIERS = re(`${B}(?:соск[аи]${E}|соска-пустышк|пустышк)`);
+const POSTPARTUM = re(`послеродов|${B}для мам${E}|для рожениц`);
+const ADULT_ABSORBENT = re(
+  `для взрослых|для женщин|для мужчин|женск|мужск|менструальн|урологическ|депенд|depend|${B}seni${E}|${B}сени${E}|${B}tena${E}|${B}тена${E}|abena|абена|${B}id${E}|life premium|terezamed|frau comfort|marabu|марабу|котекс|kotex|always|олвейс|libresse|либресс`,
+);
+// Household products (laundry, dishes): the catalogue has no household section, hygiene is the closest one.
+const HOUSEHOLD = re(`${B}(?:для стирки|стиральн|пятновывод|отбеливатель|кондиционер для белья|для посудомоечн|для мытья (?:дет\\p{L}* )?посуды|средство для посуды)`);
+const FOR_CHILDREN = re(`детск|${B}дет\\.|для детей|для новорожд|ушастый нянь|мама знает`);
+// Creams, powders and wipes "for nappies" are skin care, not nappies.
+const NAPPY_CARE = re(`${B}(?:крем|мазь|присыпк|салфетк|масл|лосьон|пенк|гел|бальзам|спрей)`);
+// Sweets sold by weight ("Драже без сахара 20 гр", "пастилки из фруктов 40 гр"): confectionery, not a dosage form.
+const SWEETS = re(`${B}(?:драже|пастилк|пастил[аы]|леденц|мармелад|конфет)`);
+const BY_WEIGHT = re(`\\d\\s?(?:гр?|g)${E}`);
 
 function result(category: CategorySlug | null, confidence: number, rule: string, reason: string): Classification {
   return {
@@ -153,6 +183,22 @@ export function classifyName(rawName: string): Classification {
   const badSign = has(n, "bad") || has(n, "badBrands");
   const vitamin = has(n, "vitaminWords");
 
+  // 0. Nappies, pants and pacifiers, before anything else: these names often carry "р-р" (size) and "№" (count).
+  if (has(n, "baby") || has(n, "babyBrands") || NAPPIES.test(n) || PACIFIERS.test(n)) {
+    if (NAPPIES.test(n) && !NAPPY_CARE.test(n)) {
+      if (POSTPARTUM.test(n)) return result("mama-i-malysh", 0.8, "baby.mother", "Послеродовое бельё — товар для мамы");
+      if (ADULT_ABSORBENT.test(n)) return result("gigiena", 0.85, "hygiene.adult", "Средство личной гигиены для взрослых");
+      return result("mama-i-malysh", 0.88, "baby", "Товар для младенцев, кормления или ухода за малышом");
+    }
+    if (PACIFIERS.test(n)) return result("mama-i-malysh", 0.88, "baby", "Товар для младенцев, кормления или ухода за малышом");
+  }
+
+  // 0a. Household products: laundry and dish detergents (for children's things — "Mother and baby").
+  if (HOUSEHOLD.test(n)) {
+    if (FOR_CHILDREN.test(n)) return result("mama-i-malysh", 0.85, "baby.household", "Бытовое средство для детских вещей или посуды");
+    return result("gigiena", 0.8, "household", "Бытовое средство (стирка, посуда) — ближайший раздел «Гигиена»");
+  }
+
   // 1. Oral care: toothpastes, brushes, floss, rinses — before medicines (some contain "%" or "мг"),
   //    but a gum *medicine* (gel with a dose/"%" that is not a toothpaste) is left to the medicine rules.
   if (has(n, "oral") && !/пустышк|соск[аи]/.test(n) && !(medForm && !/зубн|щетк|ершик|флосс|нит/.test(n))) {
@@ -164,7 +210,10 @@ export function classifyName(rawName: string): Classification {
 
   // 3. Medical devices and supplies (device words are specific; checked before dosage forms because
   //    e.g. "шприц" or "тест" names do not describe medicines).
-  if (has(n, "devices") && !(medForm && dosed)) {
+  // A prefilled syringe with a solution for injection is a medicine ("Катенокс готовый шприц раствор для инъекций").
+  // ("готовый шприц" alone is left as it was: such products can be medical devices, e.g. hyaluronate syringes).
+  const prefilled = /раствор для (?:инъек|иньек)/u.test(n) && !/систем|канюл|катетер|(?<![\p{L}])игл/u.test(n);
+  if (has(n, "devices") && !(medForm && dosed) && !prefilled) {
     if (has(n, "baby") && /термометр для (?:ванн|воды)|пустышк|соск/.test(n)) {
       return result("mama-i-malysh", 0.85, "baby.accessory", "Принадлежность для ухода за младенцем");
     }
@@ -178,6 +227,12 @@ export function classifyName(rawName: string): Classification {
 
   // 3b. Nasal sprays with sea water may be registered as medicines or as medical devices — not decided by name.
   if (has(n, "seaWater")) return result("medicinskie-pribory-i-izdeliya", 0.5, "devices.sea-water", "Средство с морской водой: статус (ЛС или медизделие) по названию не определяется");
+
+  // 3c. Sweets sold by weight are food even when the name says "драже" or "пастилки" (no count, no dose).
+  if (medForm && SWEETS.test(n) && BY_WEIGHT.test(n) && !/№|(?<![\p{L}])no\s?\d/u.test(n) && !dosed && !has(n, "medNote") && !badSign && !vitamin) {
+    if (has(n, "babyFood") || FOR_CHILDREN.test(n)) return result("mama-i-malysh", 0.86, "baby.food", "Детское питание (назначение — для детей)");
+    return result("pravilnoe-pitanie", 0.8, "food.sweets", "Сладости на развес (драже, пастилки) — пищевой продукт, не лекарственная форма");
+  }
 
   // 4. Medicines: an explicit dosage form, usually with a dose. A dosage form plus a supplement brand/vitamin
   //    words is a vitamin/supplement product; its status (medicine or supplement) is not decided from the name.

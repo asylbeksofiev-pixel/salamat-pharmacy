@@ -21,7 +21,7 @@ export function Breadcrumbs({ items, label, baseUrl }: { items: Crumb[]; label: 
           <li key={i} className="flex min-w-0 items-center gap-1.5">
             {i > 0 ? <Icon name="chevronRight" size={14} className="shrink-0 text-line-strong" /> : null}
             {c.href && i < items.length - 1 ? (
-              <Link href={c.href} className="rounded hover:text-brand-700 hover:underline">
+              <Link href={c.href} className="inline-flex min-h-11 items-center rounded hover:text-brand-700 hover:underline md:min-h-0">
                 {c.label}
               </Link>
             ) : (

@@ -7,7 +7,7 @@ import "server-only";
 // * categories — category navigation is shown only for sections that actually contain products: SKU-level products
 //   or catalogue products with a published section (catalog_item_categories, review_status auto/confirmed);
 // * catalogCategoryCounts — catalogue products per section (subsections included), for tiles and filters;
-// * catalogTotal — size of the product list from public.pharmacy_products.
+// * catalogTotal — size of the public product list from public.pharmacy_products (hidden products are not counted).
 import { cache } from "react";
 import { prisma } from "./db";
 import { env } from "./env";
@@ -37,7 +37,8 @@ export const getStorefrontState = cache(async (): Promise<StorefrontState> => {
       distinct: ["categoryId"],
     }),
     prisma.category.findMany({ select: { id: true, parentId: true } }),
-    prisma.$queryRaw<{ n: bigint }[]>`SELECT count(*) AS n FROM public.pharmacy_products`.then(
+    prisma.$queryRaw<{ n: bigint }[]>`SELECT count(*) AS n FROM public.pharmacy_products p
+      WHERE NOT EXISTS (SELECT 1 FROM "catalog_item_visibility" v WHERE v."product_id" = p."id" AND NOT v."is_public")`.then(
       (r) => Number(r[0]?.n ?? 0),
       () => null,
     ),
@@ -46,6 +47,7 @@ export const getStorefrontState = cache(async (): Promise<StorefrontState> => {
       SELECT c."category_id" AS id, count(*) AS n
       FROM "catalog_item_categories" c JOIN public.pharmacy_products p ON p."id" = c."product_id"
       WHERE c."review_status" IN ('auto', 'confirmed') AND c."category_id" IS NOT NULL
+        AND NOT EXISTS (SELECT 1 FROM "catalog_item_visibility" v WHERE v."product_id" = p."id" AND NOT v."is_public")
       GROUP BY 1`.then(
       (r) => r.map((x) => ({ id: x.id, n: Number(x.n) })),
       () => [] as { id: string; n: number }[],

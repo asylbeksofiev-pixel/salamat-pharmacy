@@ -6,7 +6,8 @@ import { Icon, isIconName } from "../icons";
 import { cn } from "../ui/cn";
 import { Drawer } from "../ui/Dialog";
 import { useSite } from "./SiteProvider";
-import { useCartCount, useFavorites, useHydrated } from "@/lib/client/stores";
+import { cartTotals, useCart, useFavorites, useHydrated } from "@/lib/client/stores";
+import { cartSummary } from "@/lib/cart-summary";
 import { fmt, LOCALE_COOKIE, localeLabels, localeNames, localizedPath, locales, splitLocale, type Locale } from "@/lib/i18n/config";
 import { formatPhone, telHref } from "@/lib/format";
 import { CART_BUMP_EVENT } from "@/lib/client/fly-to-cart";
@@ -139,12 +140,13 @@ export function PharmacyChip({ compact = false }: { compact?: boolean }) {
 }
 
 export function HeaderCounters() {
-  const { t, href, orderingEnabled } = useSite();
+  const { t, href, locale, orderingEnabled } = useSite();
   const hydrated = useHydrated();
   const bump = useCartBump();
-  const count = useCartCount();
+  const totals = cartTotals(useCart());
   const favs = useFavorites().length;
-  const c = hydrated ? count : 0;
+  // The badge shows positions (different products); the label says both: "1 позиция · 2 шт.".
+  const c = hydrated ? totals.positions : 0;
   const f = hydrated ? favs : 0;
   return (
     <div className="flex items-center gap-1">
@@ -155,8 +157,8 @@ export function HeaderCounters() {
       {orderingEnabled ? (
         <Link
           href={href("/cart")}
-          className="relative flex h-11 items-center gap-3.5 rounded-[var(--radius-md)] px-2.5 text-ink-soft transition-[background-color,color,scale] duration-200 hover:bg-surface hover:text-ink motion-safe:active:scale-95"
-          aria-label={`${t.common.cart}${c ? `. ${fmt(t.header.cartCount, { count: c })}` : ""}`}
+          className="relative flex h-11 min-w-11 items-center justify-center gap-3.5 rounded-[var(--radius-md)] px-2.5 text-ink-soft transition-[background-color,color,scale] duration-200 hover:bg-surface hover:text-ink motion-safe:active:scale-95"
+          aria-label={`${t.common.cart}${c ? `. ${fmt(t.header.cartSummary, { summary: cartSummary(t, locale, totals) })}` : ""}`}
         >
           <span className="relative" data-cart-target>
             <span key={`icon-${bump}`} className={cn("grid place-items-center", bump > 0 && "sal-cart-bump")}>
@@ -321,7 +323,8 @@ export function MobileBottomNav() {
   const { t, href, locale, orderingEnabled } = useSite();
   const pathname = usePathname() || "/";
   const hydrated = useHydrated();
-  const count = useCartCount();
+  const totals = cartTotals(useCart());
+  const count = totals.positions;
   const favs = useFavorites().length;
   const bump = useCartBump();
   const { path } = splitLocale(pathname);
@@ -391,6 +394,7 @@ export function MobileBottomNav() {
                   {it.badge ? <span key={`count-${it.badge}`} className="sal-badge-bump absolute -top-1 right-1 grid min-w-4.5 place-items-center rounded-full bg-accent-500 px-1 text-[0.62rem] leading-[1.125rem] font-bold text-white" aria-hidden="true">{it.badge}</span> : null}
                 </span>
                 <span className={cn("max-w-full truncate px-0.5", on && "font-semibold")}>{it.label}</span>
+                {it.href === "/cart" && it.badge ? <span className="sr-only">. {fmt(t.header.cartSummary, { summary: cartSummary(t, locale, totals) })}</span> : null}
               </Link>
             </li>
           );

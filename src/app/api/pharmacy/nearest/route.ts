@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/server/db";
-import { geocodeAddress, geocoderProvider, GeocoderUnavailableError, inArea, type GeoPoint } from "@/server/geocode";
+import { geocodeCandidates, geocoderProvider, GeocoderUnavailableError, inArea, type GeoPoint } from "@/server/geocode";
 import { memoryRateLimit } from "@/server/rate-limit";
 import { clientIpFrom, hashIdentifier, isSameOrigin } from "@/server/request";
 import { distanceKm } from "@/lib/geo";
@@ -18,8 +18,9 @@ const body = z.object({
 /**
  * Nearest pharmacies to an address typed by the visitor. The address is geocoded on the server (the key stays
  * here) and sent in the request body, not the URL; it is not logged or stored. Distances are straight-line
- * distances between coordinates (haversine), nearest first. A picked suggestion already has coordinates: then the
- * geocoder is not called again (the point must lie in Astana and its suburbs).
+ * distances between coordinates (haversine), nearest first. A picked suggestion or a chosen address already has
+ * coordinates: then the geocoder is not called again (the point must lie in Astana and its suburbs). When the address
+ * matches several different places, the answer is `choices` instead of results.
  */
 export async function POST(req: Request) {
   if (!isSameOrigin(req)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
@@ -31,8 +32,16 @@ export async function POST(req: Request) {
   try {
     const given = parsed.data.point;
     if (given && !inArea(given.lat, given.lng)) return NextResponse.json({ error: "not_found" }, { status: 404 });
-    const point: GeoPoint | null = given ? { ...given, label: parsed.data.address } : await geocodeAddress(parsed.data.address.slice(0, 120), parsed.data.locale, parsed.data.uri);
-    if (!point) return NextResponse.json({ error: "not_found" }, { status: 404 });
+    const found: GeoPoint[] = given ? [{ ...given, label: parsed.data.address }] : await geocodeCandidates(parsed.data.address.slice(0, 120), parsed.data.locale, parsed.data.uri);
+    if (!found.length) return NextResponse.json({ error: "not_found" }, { status: 404 });
+    // Several different places match: the visitor chooses one (it comes back as `point`), no distances are guessed.
+    if (found.length > 1) {
+      return NextResponse.json(
+        { choices: found.map((c) => ({ label: c.label, point: { lat: c.lat, lng: c.lng } })), provider: geocoderProvider() },
+        { headers: { "Cache-Control": "no-store" } },
+      );
+    }
+    const point = found[0];
     const pharmacies = await prisma.pharmacy.findMany({
       where: { isActive: true, latitude: { not: null }, longitude: { not: null }, city: { isActive: true } },
       select: { id: true, latitude: true, longitude: true },

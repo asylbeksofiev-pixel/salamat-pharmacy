@@ -33,7 +33,7 @@ export function PharmacyCard({ p, t, locale, selected, routes }: { p: PharmacyVi
       {p.photos.length ? <PharmacyGallery photos={p.photos} address={p.address} className="-mx-4 -mt-4 sm:-mx-5 sm:-mt-5 [&>figcaption]:px-4 sm:[&>figcaption]:px-5" /> : null}
       <div className="flex items-start justify-between gap-3">
         <h3 className="leading-snug font-semibold text-ink" lang={dataLang(locale, p.address)}>
-          <Link href={localizedPath(locale, `/pharmacies/${p.slug}`)} className="transition-colors hover:text-brand-700 hover:underline">
+          <Link href={localizedPath(locale, `/pharmacies/${p.slug}`)} className="inline-flex min-h-11 items-center transition-colors hover:text-brand-700 hover:underline md:min-h-0">
             {p.address}
           </Link>
         </h3>
@@ -53,7 +53,7 @@ export function PharmacyCard({ p, t, locale, selected, routes }: { p: PharmacyVi
       <ul className="flex flex-col gap-1 text-sm">
         {p.phones.map((ph) => (
           <li key={ph}>
-            <a href={telHref(ph)} className="inline-flex items-center gap-2 font-medium text-ink-soft hover:text-brand-700">
+            <a href={telHref(ph)} className="inline-flex min-h-11 items-center gap-2 font-medium text-ink-soft hover:text-brand-700">
               <Icon name="phone" size={16} className="text-brand-600" />
               {formatPhone(ph)}
             </a>

@@ -47,3 +47,15 @@ export function buildSearchText(parts: Array<string | null | undefined | string[
   const flat = parts.flatMap((p) => (Array.isArray(p) ? p : [p])).filter((p): p is string => !!p && !!p.trim());
   return normalizeSearchText(Array.from(new Set(flat)).join(" ")).slice(0, 2000);
 }
+
+/** The opposite case: Latin brand names typed with the Russian layout, "ишщвукьф" -> "bioderma". */
+export function fixKeyboardLayoutToLatin(input: string): string | null {
+  const lower = input.toLowerCase();
+  if (!/[а-яё]/.test(lower) || /[a-z]/.test(lower)) return null;
+  let out = "";
+  for (const ch of lower) {
+    const i = ruLayout.indexOf(ch);
+    out += i >= 0 ? en[i] : ch;
+  }
+  return out === lower || !/^[a-z0-9\s.-]+$/.test(out) ? null : out;
+}
