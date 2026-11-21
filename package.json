@@ -22,6 +22,7 @@
     "postinstall": "prisma generate",
     "db:catalog-fixture": "node scripts/catalog-fixture.mjs",
     "catalog:classify": "tsx scripts/classify-catalog.ts",
+    "catalog:category-fix": "tsx scripts/catalog-category-fix.ts",
     "photos:snapshot": "tsx scripts/catalog-photos/internet.ts snapshot",
     "photos:fetch-sources": "tsx scripts/catalog-photos/internet.ts fetch-sources",
     "photos:discover": "tsx scripts/catalog-photos/internet.ts discover",
